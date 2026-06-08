@@ -2,14 +2,15 @@
 image_tool.py — Interfaz gráfica para create_image().
 """
 
-import io
+from io import BytesIO
+from sys import argv, exit
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog
 
-import cairosvg
+from cairosvg import svg2png
 from PIL import Image, ImageTk
-from imgrid import create_image, lang
+from imgrid import create_image, lang, VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,7 @@ messages = {
 
 def tk_msg(key):
     """Devuelve el mensaje en el idioma activo (fallback a inglés)."""
-    return messages.get(lang[0], messages['en']).get(key, key)
+    return messages.get(lang, messages['en']).get(key, key)
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,7 @@ def _validate_int(value, name, minimum):
 class App(tk.Tk):
 
     PAD         = 12
-    BTN_WIDTH   = 30
+    BTN_WIDTH   = 60
     ENTRY_WIDTH = 6
     BG          = '#000000'
     WIDGET_BG   = '#1a1a1a'
@@ -93,10 +94,11 @@ class App(tk.Tk):
     BORDER      = '#444444'
     ERR_COLOR   = '#ff4444'
     OK_COLOR    = '#888888'
+    OK_GEN      = '#ffff00'
     DEFAULT_BG  = '#ffffff'
-    FONT        = ('Courier', 10)
-    FONT_BTN    = ('Courier', 10, 'bold')
-    FONT_MSG    = ('Courier', 9)
+    FONT        = ('sans serif', 14)
+    FONT_BTN    = ('', 14, 'bold')
+    FONT_MSG    = ('', 14)
 
     def __init__(self):
         super().__init__()
@@ -118,12 +120,12 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     def _set_icon(self):
         """Carga logo.svg y lo establece como ícono de la ventana."""
-        svg_path = Path(__file__).parent / 'logo.svg'
+        svg_path = Path(__file__).parent.parent / 'icon.svg'
         try:
-            png_data = cairosvg.svg2png(
+            png_data = svg2png(
                 url=str(svg_path), output_width=64, output_height=64
             )
-            img = Image.open(io.BytesIO(png_data))
+            img = Image.open(BytesIO(png_data))
             self._icon = ImageTk.PhotoImage(img)
             self.iconphoto(True, self._icon)
         except Exception:
@@ -146,12 +148,12 @@ class App(tk.Tk):
             self,
             textvariable=self._image_path,
             bg=self.BG,
-            fg=self.OK_COLOR,
-            font=('Courier', 8),
-            wraplength=280,
-            justify='left',
+            fg='#ffffff',
+            font=('Courier', 14),
+            wraplength=350,
+            justify='center',
         )
-        self._lbl_image.pack(padx=p, pady=(2, 0), anchor='w')
+        self._lbl_image.pack(padx=p, pady=(2, 0), anchor='center')
 
         # ── COLUMNAS / FILAS / SEPARADOR ─────────────────────────────
         frame_crg = tk.Frame(self, bg=self.BG)
@@ -200,8 +202,8 @@ class App(tk.Tk):
             bg=self.BG,
             fg=self.OK_COLOR,
             font=self.FONT_MSG,
-            wraplength=280,
-            justify='left',
+            wraplength=500,
+            justify='center',
         )
         self._lbl_status.pack(padx=p, pady=(4, p), anchor='w', fill='x')
 
@@ -273,8 +275,8 @@ class App(tk.Tk):
     # Mensajes de estado (reemplazan messagebox)
     # ------------------------------------------------------------------
     def _show_ok(self, text):
-        """Muestra un mensaje de éxito en gris."""
-        self._lbl_status.configure(text=text, fg=self.OK_COLOR)
+        """Muestra un mensaje de éxito en amarillo."""
+        self._lbl_status.configure(text=text, fg=self.OK_GEN)
 
     def _show_error(self, text):
         """Muestra un mensaje de error en rojo."""
@@ -294,6 +296,7 @@ class App(tk.Tk):
         )
         if path:
             self._image_path.set(path)
+            self._btn_open.configure(text=Path(path).name)
             self._lbl_status.configure(text='')    # limpia estado anterior
 
     def _pick_color(self):
@@ -334,10 +337,13 @@ class App(tk.Tk):
             self._show_error(str(e))
             return
 
-        # Elegir ruta de salida
+        # Elegir ruta de salida con nombre sugerido
+        inp_path  = Path(inp)
+        suggested = f'{inp_path.stem}_{cols}x{rows}{inp_path.suffix}'
         out = filedialog.asksaveasfilename(
             title=tk_msg('save_title'),
-            defaultextension='.png',
+            initialfile=suggested,
+            defaultextension=inp_path.suffix,
             filetypes=[
                 ('PNG',  '*.png'),
                 ('JPEG', '*.jpg *.jpeg'),
@@ -366,5 +372,13 @@ class App(tk.Tk):
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
+
+    try:
+        if argv[1] in ('-v', '--version'):
+            print(f'{Path(argv[0]).stem} {VERSION}')
+            exit(0)
+    except IndexError:
+        pass
+
     app = App()
     app.mainloop()

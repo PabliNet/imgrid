@@ -5,9 +5,11 @@ from sys import argv, exit
 from re import match, split
 from PIL import Image
 
+VERSION = '0.1'
+
 def detect_lang():
     setlocale(LC_ALL, '')
-    return (getlocale()[0] or 'en').split('_')
+    return (getlocale()[0] or 'en').split('_')[0]
 
 lang = detect_lang()
 
@@ -62,6 +64,13 @@ def create_image(inp, out, cols, rows, gap=5, bg=None):
 
 
 if __name__ == '__main__':
+    try:
+        if argv[1] in ['-v', '--version']:
+            print(f'{Path(argv[0]).stem} {VERSION}')
+            exit(0)
+    except IndexError:
+        exit(msg(1))
+
     args = argv[1:]
     if len(args) == 2:
         args.append('')
