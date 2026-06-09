@@ -4,6 +4,7 @@ image_tool.py — Interfaz gráfica para create_image().
 
 from io import BytesIO
 from sys import argv, exit
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog
@@ -11,6 +12,23 @@ from tkinter import colorchooser, filedialog
 from cairosvg import svg2png
 from PIL import Image, ImageTk
 from imgrid import create_image, lang, VERSION
+
+
+def _get_pictures_dir():
+    """Devuelve ~/Imágenes, ~/Images, ~/Pictures o ~ según lo que exista."""
+    home = Path.home()
+    for name in ('Imágenes', 'Images', 'Pictures'):
+        candidate = home / name
+        if candidate.is_dir():
+            return candidate
+    return home
+
+
+def _get_base_path():
+    """Devuelve la ruta base: _MEIPASS si compilado, parent.parent si script."""
+    if hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent.parent
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +138,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     def _set_icon(self):
         """Carga logo.svg y lo establece como ícono de la ventana."""
-        svg_path = Path(__file__).parent.parent / 'icon.svg'
+        svg_path = _get_base_path() / 'icon.svg'
         try:
             png_data = svg2png(
                 url=str(svg_path), output_width=64, output_height=64
@@ -203,7 +221,7 @@ class App(tk.Tk):
             fg=self.OK_COLOR,
             font=self.FONT_MSG,
             wraplength=500,
-            justify='center',
+            justify='left',
         )
         self._lbl_status.pack(padx=p, pady=(4, p), anchor='w', fill='x')
 
@@ -289,6 +307,7 @@ class App(tk.Tk):
         """Abre el diálogo para seleccionar la imagen de entrada."""
         path = filedialog.askopenfilename(
             title=tk_msg('open_title'),
+            initialdir=_get_pictures_dir(),
             filetypes=[
                 (tk_msg('open_types'), '*.jpeg *.jpg *.png'),
                 (tk_msg('open_all'),   '*.*'),
