@@ -5,7 +5,7 @@ from sys import argv, exit
 from re import fullmatch, split
 from PIL import Image
 
-VERSION = '0.2'
+VERSION = '0.0.2'
 
 def detect_lang():
     setlocale(LC_ALL, '')
