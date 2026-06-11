@@ -53,6 +53,7 @@ messages = {
         'err_min':     "'{}' debe ser mayor a {}.",
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada en: {}',
+        'transparent': 'Transparente',
     },
     'en': {
         'title':       'Image to grid',
@@ -72,6 +73,7 @@ messages = {
         'err_min':     "'{}' must be greater than {}.",
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved at: {}',
+        'transparent': 'Transparent',
     },
 }
 
@@ -113,7 +115,7 @@ class App(tk.Tk):
     ERR_COLOR   = '#ff4444'
     OK_COLOR    = '#888888'
     OK_GEN      = '#ffff00'
-    DEFAULT_BG  = '#ffffff'
+    DEFAULT_BG  = None
     FONT        = ('sans serif', 14)
     FONT_BTN    = ('', 14, 'bold')
     FONT_MSG    = ('', 14)
@@ -138,7 +140,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     def _set_icon(self):
         """Carga logo.svg y lo establece como ícono de la ventana."""
-        svg_path = _get_base_path() / 'icon.svg'
+        svg_path = _get_base_path() / 'imgrid.svg'
         try:
             png_data = svg2png(
                 url=str(svg_path), output_width=64, output_height=64
@@ -168,7 +170,7 @@ class App(tk.Tk):
             bg=self.BG,
             fg='#ffffff',
             font=('Courier', 14),
-            wraplength=350,
+            wraplength=600,
             justify='center',
         )
         self._lbl_image.pack(padx=p, pady=(2, 0), anchor='center')
@@ -191,17 +193,38 @@ class App(tk.Tk):
             widget.pack(side='left', expand=True)
 
         # ── BACKGROUND ───────────────────────────────────────────────
-        self._btn_bg = self._make_button(
-            self, tk_msg('background'), self._pick_color
-        )
-        self._btn_bg.pack(fill='x', padx=p, pady=(p, 0))
+        frame_bg = tk.Frame(self, bg=self.BG)
+        frame_bg.pack(padx=p, pady=(p, 0), fill='x')
 
-        # Hex del color elegido (muestra el default desde el inicio)
+        self._btn_bg = self._make_button(
+            frame_bg, tk_msg('background'), self._pick_color
+        )
+        self._btn_bg.pack(side='left', fill='x', expand=True)
+
+        # Botón × para resetear el fondo a transparente
+        self._btn_reset_bg = tk.Button(
+            frame_bg,
+            text='×',
+            command=self._reset_color,
+            font=self.FONT_BTN,
+            bg=self.WIDGET_BG,
+            fg=self.ACCENT,
+            activebackground=self.BORDER,
+            activeforeground=self.FG,
+            relief='groove',
+            bd=1,
+            cursor='hand2',
+            padx=10,
+            pady=6,
+        )
+        self._btn_reset_bg.pack(side='left', padx=(4, 0))
+
+        # Hex del color elegido o "Transparente" por defecto
         self._lbl_color = tk.Label(
             self,
-            text=self._bg_color,
+            text=tk_msg('transparent'),
             bg=self.BG,
-            fg=self._bg_color,
+            fg=self.OK_COLOR,
             font=self.FONT_MSG,
         )
         self._lbl_color.pack(pady=(2, 0))
@@ -220,7 +243,7 @@ class App(tk.Tk):
             bg=self.BG,
             fg=self.OK_COLOR,
             font=self.FONT_MSG,
-            wraplength=500,
+            wraplength=600,
             justify='left',
         )
         self._lbl_status.pack(padx=p, pady=(4, p), anchor='w', fill='x')
@@ -318,11 +341,20 @@ class App(tk.Tk):
             self._btn_open.configure(text=Path(path).name)
             self._lbl_status.configure(text='')    # limpia estado anterior
 
+    def _reset_color(self):
+        """Resetea el fondo a transparente (None)."""
+        self._bg_color = None
+        self._btn_bg.configure(bg=self.WIDGET_BG)
+        self._lbl_color.configure(
+            text=tk_msg('transparent'),
+            fg=self.OK_COLOR,
+        )
+
     def _pick_color(self):
         """Abre el selector de color para el fondo."""
         color = colorchooser.askcolor(
             title=tk_msg('color_title'),
-            color=self._bg_color,
+            color=self._bg_color or '#ffffff',
         )
         # askcolor devuelve ((r, g, b), '#rrggbb') o (None, None)
         if color and color[1]:
@@ -358,16 +390,28 @@ class App(tk.Tk):
 
         # Elegir ruta de salida con nombre sugerido
         inp_path  = Path(inp)
-        suggested = f'{inp_path.stem}_{cols}x{rows}{inp_path.suffix}'
+        suggested = f'{inp_path.stem}_{cols}x{rows}'
+
+        # El tipo de la imagen de entrada va primero en la lista
+        ext = inp_path.suffix.lower()
+        if ext in ('.jpg', '.jpeg'):
+            filetypes = [
+                ('JPEG', '*.jpg *.jpeg'),
+                ('PNG',  '*.png'),
+                (tk_msg('open_all'), '*.*'),
+            ]
+        else:
+            filetypes = [
+                ('PNG',  '*.png'),
+                ('JPEG', '*.jpg *.jpeg'),
+                (tk_msg('open_all'), '*.*'),
+            ]
+
         out = filedialog.asksaveasfilename(
             title=tk_msg('save_title'),
             initialfile=suggested,
             defaultextension=inp_path.suffix,
-            filetypes=[
-                ('PNG',  '*.png'),
-                ('JPEG', '*.jpg *.jpeg'),
-                (tk_msg('open_all'), '*.*'),
-            ],
+            filetypes=filetypes,
         )
         if not out:
             return    # usuario canceló

@@ -2,10 +2,10 @@
 from locale import getlocale, LC_ALL, setlocale
 from pathlib import Path
 from sys import argv, exit
-from re import match, split
+from re import fullmatch, split
 from PIL import Image
 
-VERSION = '0.1'
+VERSION = '0.2'
 
 def detect_lang():
     setlocale(LC_ALL, '')
@@ -34,7 +34,7 @@ def msg(n:int):
     return n
 
 
-def create_image(inp, out, cols, rows, gap=5, bg=None):
+def create_image(inp, out, cols, rows, gap, bg):
     with Image.open(inp) as img:
 
         canvas_width = (
@@ -48,7 +48,11 @@ def create_image(inp, out, cols, rows, gap=5, bg=None):
         )
 
         if bg is None:
-            bg = (255, 255, 255, 255) if img.mode == 'RGBA' else 'white'
+            bg = '#ffffff'
+            if Path(out).suffix.lower() == '.png':
+                if img.mode == 'RGB':
+                    img = img.convert('RGBA')
+                bg = (0, 0, 0, 0)
 
         canvas = Image.new(img.mode, (canvas_width, canvas_height), bg)
 
@@ -77,30 +81,47 @@ if __name__ == '__main__':
     if len(args) != 3:
         exit(msg(1))
 
-    pattern_grid = r'^[1-9]\d*[Xx×][1-9]\d*$'
+    pattern_all = (
+        r'^[1-9]\d*[Xx×][1-9]\d*'
+        r'(?:,\d+)?'
+        r'(?:,#(?:[0-9A-Fa-f]{3}){1,2})?$'
+    )
     pattern_split = r'[Xx×]'
     aux = {
         'file': {
             'name': [],
             'count': 0,
         },
-        'grid': {
-            'grid': '',
+        'config': {
+            'config': '',
             'count': 0
         }
     }
     for a in args:
-        if match(pattern_grid, a):
-            aux['grid']['grid'] = a
-            aux['grid']['count'] += 1
+        if fullmatch(pattern_all, a):
+            aux['config']['config'] = a
+            aux['config']['count'] += 1
         else:
             aux['file']['name'].append(a)
             aux['file']['count'] += 1
 
-    if aux['file']['count'] != 2 or aux['grid']['count'] != 1:
+    if aux['file']['count'] != 2 or aux['config']['count'] != 1:
         exit(msg(2))
 
-    cols, rows = [int(x) for x in split(pattern_split, aux['grid']['grid'])]
+    list_config = aux['config']['config'].split(',')
+
+    cols, rows = [int(x) for x in split(pattern_split, list_config[0])]
+
+    gap, bg = 0, None
+
+    if len(list_config) == 2:
+        if list_config[1].startswith('#'):
+            bg = list_config[1]
+        else:
+            gap = int(list_config[1])
+
+    elif len(list_config) == 3:
+        gap, bg = int(list_config[1]), list_config[2]
 
     inp, out = aux['file']['name']
 
@@ -113,7 +134,7 @@ if __name__ == '__main__':
         out = f'{f.stem}_{cols}x{rows}{f.suffix}'
 
     try:
-        create_image(inp, out, cols, rows)
+        create_image(inp, out, cols, rows, gap, bg)
     except Exception as e:
         print(e)
         exit(msg(4))
