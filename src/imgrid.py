@@ -5,7 +5,7 @@ from sys import argv, exit
 from re import fullmatch, split
 from PIL import Image
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 def detect_lang():
     setlocale(LC_ALL, '')
@@ -130,8 +130,12 @@ if __name__ == '__main__':
     if not f.is_file():
         exit(msg(3))
 
+    default_name = f'{f.stem}_{cols}x{rows}{f.suffix}'
+
     if not out:
-        out = f'{f.stem}_{cols}x{rows}{f.suffix}'
+        out = default_name
+    elif Path(out).is_dir():
+        out = str(Path(out) / default_name)
 
     try:
         create_image(inp, out, cols, rows, gap, bg)
