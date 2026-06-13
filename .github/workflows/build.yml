@@ -1,8 +1,10 @@
 name: Build ImGrid
+
 on:
   push:
     tags:
       - 'v*'
+
 jobs:
   build:
     strategy:
@@ -12,22 +14,37 @@ jobs:
           - windows-latest
           - macos-latest
     runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-      - name: Build
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
         run: |
           pyinstaller --onefile src/imgrid.py
-          pyinstaller --onefile src/tkimgrid.py
+          pyinstaller --onefile \
+            --add-data "imgrid.svg:." \
+            --collect-all PIL \
+            src/tkimgrid.py
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller --onefile src/imgrid.py
+          pyinstaller --onefile --add-data "imgrid.svg;." --collect-all PIL src/tkimgrid.py
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
