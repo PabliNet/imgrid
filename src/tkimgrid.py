@@ -149,8 +149,7 @@ class App(tk.Tk):
             self._icon = ImageTk.PhotoImage(img)
             self.iconphoto(True, self._icon)
         except Exception as e:
-            print(f'El error es {e}')
-            #pass    # si falla, la ventana usa el ícono por defecto
+            pass    # si falla, la ventana usa el ícono por defecto
 
     # ------------------------------------------------------------------
     # Construcción de la interfaz
