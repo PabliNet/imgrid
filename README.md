@@ -1,10 +1,14 @@
 # ImGrid
 
-A command-line tool that splits an image into a grid of tiles. Includes an optional GUI built with Tkinter.
+A tool for generating print-ready image grids. It distributes an image across multiple rows and columns, allows configuring the spacing between copies, and lets you choose the background color of the final composition. Available both as a graphical interface (GUI) and as a command-line tool (CLI).
 
 ![ImGrid screenshot](screenshots/imgrid.gif)
 
 ---
+
+## Download
+
+Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requirements
 
@@ -18,37 +22,45 @@ pip install pillow cairosvg
 ## Usage
 
 ```
-./imgrid INPUT GRID [OUTPUT]
+./imgrid <input> <config> [output]
 ```
 
 ### Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `INPUT`  | Yes | Path to the source image |
-| `GRID`   | Yes | Grid dimensions in `COLUMNSxROWS` format |
-| `OUTPUT` | No | Path for the output image (auto-generated if omitted) |
+| Argument  | Required | Description |
+|-----------|----------|-------------|
+| `input`   | Yes | Path to the source image |
+| `config`  | Yes | Grid configuration (see below) |
+| `output`  | No  | Path for the output image (auto-generated if omitted) |
 
-### Grid format
+### Configuration
 
-The grid is specified as `COLUMNSxROWS`. The separator can be any of:
-- `x` (lowercase)
-- `X` (uppercase)
-- `×` (multiplication sign)
+The `config` argument accepts up to three values separated by commas:
+
+| Value | Required | Description |
+|-------|----------|-------------|
+| Grid  | Yes | Grid dimensions as `COLUMNSxROWS` — separator can be `x`, `X`, or `×` |
+| Spacing | No | Gap between tiles in pixels |
+| Background | No | Background color in hex format (e.g. `#000000` for black, `#FFFFFF` for white) |
 
 ## Examples
 
 ```bash
-# Split into 2 columns × 3 rows, save to output.jpg
+# 2 columns × 3 rows, save to output.jpg
 ./imgrid input.jpg 2x3 output.jpg
 
-# Using uppercase X
-./imgrid photo.png 4X2 result.png
+# 4 columns × 2 rows with 10px spacing
+./imgrid input.jpg 4X2,10 output.jpg
 
-# Using the multiplication sign
-./imgrid image.jpg 3×3
+# 3×3 grid with 5px spacing and black background
+# Linux/macOS:
+./imgrid input.jpg 3×3,5,\#000000 output.jpg
+# Windows CMD:
+imgrid input.jpg 3×3,5,#000000 output.jpg
+# Windows PowerShell:
+imgrid input.jpg 3×3,5,`#000000 output.jpg
 
-# Omitting output (auto-generated filename)
+# Auto-generated output filename
 ./imgrid input.jpg 2x3
 ```
 
@@ -71,9 +83,15 @@ This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
 ---
 
+# ImGrid
+
+Es una herramienta para generar cuadrículas de imágenes listas para imprimir. Permite distribuir una imagen en múltiples filas y columnas, configurar el espaciado entre las copias y elegir el color de fondo de la composición final. Está disponible tanto como aplicación de interfaz gráfica (GUI) como para línea de comandos (CLI).
+
 ![Captura de pantalla de ImGrid](screenshots/imgrid.gif)
 
-Herramienta de línea de comandos que divide una imagen en una cuadrícula de fragmentos. Incluye una interfaz gráfica opcional con Tkinter.
+## Descarga
+
+Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requisitos
 
@@ -87,37 +105,45 @@ pip install pillow cairosvg
 ## Uso
 
 ```
-./imgrid ENTRADA CUADRÍCULA [SALIDA]
+./imgrid <entrada> <configuración> [salida]
 ```
 
 ### Argumentos
 
-| Argumento     | Requerido | Descripción |
-|---------------|-----------|-------------|
-| `ENTRADA`     | Sí | Ruta a la imagen original |
-| `CUADRÍCULA`  | Sí | Dimensiones de la cuadrícula en formato `COLUMNASxFILAS` |
-| `SALIDA`      | No | Ruta para la imagen de salida (se genera automáticamente si se omite) |
+| Argumento       | Requerido | Descripción |
+|-----------------|-----------|-------------|
+| `entrada`       | Sí | Ruta a la imagen original |
+| `configuración` | Sí | Configuración de la cuadrícula (ver más abajo) |
+| `salida`        | No | Ruta para la imagen de salida (se genera automáticamente si se omite) |
 
-### Formato de cuadrícula
+### Configuración
 
-La cuadrícula se especifica como `COLUMNASxFILAS`. El separador puede ser cualquiera de:
-- `x` (minúscula)
-- `X` (mayúscula)
-- `×` (signo de multiplicación)
+El argumento `configuración` acepta hasta tres valores separados por comas:
+
+| Valor       | Requerido | Descripción |
+|-------------|-----------|-------------|
+| Cuadrícula  | Sí | Dimensiones como `COLUMNASxFILAS` — el separador puede ser `x`, `X` o `×` |
+| Espaciado   | No | Separación entre imágenes en píxeles |
+| Fondo       | No | Color de fondo en formato hexadecimal (p. ej. `#000000` negro, `#FFFFFF` blanco) |
 
 ## Ejemplos
 
 ```bash
-# Dividir en 2 columnas × 3 filas, guardar en output.jpg
+# 2 columnas × 3 filas, guardar en output.jpg
 ./imgrid input.jpg 2x3 output.jpg
 
-# Usando X mayúscula
-./imgrid foto.png 4X2 resultado.png
+# 4 columnas × 2 filas con 10px de espaciado
+./imgrid input.jpg 4X2,10 output.jpg
 
-# Usando el signo de multiplicación
-./imgrid imagen.jpg 3×3
+# Cuadrícula 3×3 con 5px de espaciado y fondo negro
+# Linux/macOS:
+./imgrid input.jpg 3×3,5,\#000000 output.jpg
+# Windows CMD:
+imgrid input.jpg 3×3,5,#000000 output.jpg
+# Windows PowerShell:
+imgrid input.jpg 3×3,5,`#000000 output.jpg
 
-# Sin especificar salida (nombre generado automáticamente)
+# Nombre de salida generado automáticamente
 ./imgrid input.jpg 2x3
 ```
 
