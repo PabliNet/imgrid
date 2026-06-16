@@ -58,6 +58,7 @@ Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requirements
 
+**Back-end**
 - [pyimgrid](https://pypi.org/project/pyimgrid/) (`python3-pyimgrid`)
 - [Pillow](https://python-pillow.org/) (`python3-pil`)
 
@@ -65,21 +66,29 @@ Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 pip install pyimgrid pillow
 ```
 
-### GUI dependencies (Debian APT)
+**GTK4** (`gtkimgrid`)
+- [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
+- [gir1.2-gtk-4.0](https://gtk.org/)
+- [python3](https://www.python.org/)
+- [python3-gi](https://pygobject.gnome.org/) (PyGObject)
 
-Depending on the GUI version you want to use:
+**Qt6** (`qtimgrid`)
+- [python3](https://www.python.org/)
+- [python3-pyside6.qtcore](https://doc.qt.io/qtforpython-6/) (PySide6)
+- [python3-pyside6.qtgui](https://doc.qt.io/qtforpython-6/) (PySide6)
+- [python3-pyside6.qtwidgets](https://doc.qt.io/qtforpython-6/) (PySide6)
 
-**GTK4** (`gtkimgrid`):
-```bash
-sudo apt install gir1.2-gdkpixbuf-2.0 gir1.2-gtk-4.0 python3 python3-gi python3-pil
-```
+**Tkinter** (`tkimgrid`)
+- [python3](https://www.python.org/)
+- [python3-cairosvg](https://cairosvg.org/)
+- [python3-pil.imagetk](https://python-pillow.org/) (Pillow)
+- [python3-tk](https://docs.python.org/3/library/tkinter.html)
 
-**Tkinter** (`tkimgrid`) — also requires [CairoSVG](https://cairosvg.org/):
-```bash
-sudo apt install python3-cairosvg python3-pil.imagetk python3-tk
-```
+### Recommendation
 
-**Qt6** (`qtimgrid`):
+- [plasma-integration](https://packages.debian.org/search?keywords=plasma-integration)
+
+## Usage
 
 ```
 ./imgrid <input> <config> [output]
@@ -201,6 +210,7 @@ Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requisitos
 
+**Back-end**
 - [pyimgrid](https://pypi.org/project/pyimgrid/) (`python3-pyimgrid`)
 - [Pillow](https://python-pillow.org/) (`python3-pil`)
 
@@ -208,24 +218,27 @@ Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 pip install pyimgrid pillow
 ```
 
-### Dependencias de la interfaz gráfica (Debian APT)
+**GTK4** (`gtkimgrid`)
+- [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
+- [gir1.2-gtk-4.0](https://gtk.org/)
+- [python3](https://www.python.org/)
+- [python3-gi](https://pygobject.gnome.org/) (PyGObject)
 
-Según la versión de GUI que se quiera usar:
+**Qt6** (`qtimgrid`)
+- [python3](https://www.python.org/)
+- [python3-pyside6.qtcore](https://doc.qt.io/qtforpython-6/) (PySide6)
+- [python3-pyside6.qtgui](https://doc.qt.io/qtforpython-6/) (PySide6)
+- [python3-pyside6.qtwidgets](https://doc.qt.io/qtforpython-6/) (PySide6)
 
-**GTK4** (`gtkimgrid`):
-```bash
-sudo apt install gir1.2-gdkpixbuf-2.0 gir1.2-gtk-4.0 python3 python3-gi python3-pil
-```
+**Tkinter** (`tkimgrid`)
+- [python3](https://www.python.org/)
+- [python3-cairosvg](https://cairosvg.org/)
+- [python3-pil.imagetk](https://python-pillow.org/) (Pillow)
+- [python3-tk](https://docs.python.org/3/library/tkinter.html)
 
-**Tkinter** (`tkimgrid`) — requiere también [CairoSVG](https://cairosvg.org/):
-```bash
-sudo apt install python3-cairosvg python3-pil.imagetk python3-tk
-```
+### Recomendación
 
-**Qt6** (`qtimgrid`):
-```bash
-sudo apt install python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets
-```
+- [plasma-integration](https://packages.debian.org/search?keywords=plasma-integration)
 
 ## Uso
 
