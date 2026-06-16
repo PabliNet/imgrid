@@ -6,20 +6,80 @@ A tool for generating print-ready image grids. It distributes an image across mu
 
 ---
 
+## Installation on Debian (APT)
+
+1. Add the APT repository:
+   ```bash
+   sudo echo "deb https://pablinet.github.io/apt ./" > /etc/apt/sources.list.d/pablinet.list
+   ```
+
+2. Add the APT key:
+
+   With `curl`:
+   ```bash
+   sudo curl -fsSL https://pablinet.github.io/apt/pablinet.gpg -o /etc/apt/trusted.gpg.d/pablinet.gpg
+   ```
+
+   Or with `wget`:
+   ```bash
+   sudo wget -O /etc/apt/trusted.gpg.d/pablinet.gpg https://pablinet.github.io/apt/pablinet.gpg
+   ```
+
+3. Update:
+   ```bash
+   sudo apt update
+   ```
+
+4. Install:
+
+   GUI version (GTK4):
+   ```bash
+   sudo apt install gtkimgrid
+   ```
+
+   GUI version (Tkinter):
+   ```bash
+   sudo apt install tkimgrid
+   ```
+
+   GUI version (Qt6):
+   ```bash
+   sudo apt install qtimgrid
+   ```
+
+   CLI version:
+   ```bash
+   sudo apt install imgrid
+   ```
+
 ## Download
 
 Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requirements
 
-- [Pillow](https://python-pillow.org/)
-- [CairoSVG](https://cairosvg.org/)
+- [pyimgrid](https://pypi.org/project/pyimgrid/) (`python3-pyimgrid`)
+- [Pillow](https://python-pillow.org/) (`python3-pil`)
 
 ```bash
-pip install pillow cairosvg
+pip install pyimgrid pillow
 ```
 
-## Usage
+### GUI dependencies (Debian APT)
+
+Depending on the GUI version you want to use:
+
+**GTK4** (`gtkimgrid`):
+```bash
+sudo apt install gir1.2-gdkpixbuf-2.0 gir1.2-gtk-4.0 python3 python3-gi python3-pil
+```
+
+**Tkinter** (`tkimgrid`) — also requires [CairoSVG](https://cairosvg.org/):
+```bash
+sudo apt install python3-cairosvg python3-pil.imagetk python3-tk
+```
+
+**Qt6** (`qtimgrid`):
 
 ```
 ./imgrid <input> <config> [output]
@@ -89,17 +149,82 @@ Es una herramienta para generar cuadrículas de imágenes listas para imprimir. 
 
 ![Captura de pantalla de ImGrid](screenshots/imgrid.gif)
 
+## Instalación en Debian (APT)
+
+1. Agregar el repositorio APT:
+   ```bash
+   sudo echo "deb https://pablinet.github.io/apt ./" > /etc/apt/sources.list.d/pablinet.list
+   ```
+
+2. Agregar la clave APT:
+
+   Con `curl`:
+   ```bash
+   sudo curl -fsSL https://pablinet.github.io/apt/pablinet.gpg -o /etc/apt/trusted.gpg.d/pablinet.gpg
+   ```
+
+   O con `wget`:
+   ```bash
+   sudo wget -O /etc/apt/trusted.gpg.d/pablinet.gpg https://pablinet.github.io/apt/pablinet.gpg
+   ```
+
+3. Actualizar:
+   ```bash
+   sudo apt update
+   ```
+
+4. Instalar:
+
+   Versión GUI (GTK4):
+   ```bash
+   sudo apt install gtkimgrid
+   ```
+
+   Versión GUI (Tkinter):
+   ```bash
+   sudo apt install tkimgrid
+   ```
+
+   Versión GUI (Qt6):
+   ```bash
+   sudo apt install qtimgrid
+   ```
+
+   Versión CLI:
+   ```bash
+   sudo apt install imgrid
+   ```
+
 ## Descarga
 
 Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 
 ## Requisitos
 
-- [Pillow](https://python-pillow.org/)
-- [CairoSVG](https://cairosvg.org/)
+- [pyimgrid](https://pypi.org/project/pyimgrid/) (`python3-pyimgrid`)
+- [Pillow](https://python-pillow.org/) (`python3-pil`)
 
 ```bash
-pip install pillow cairosvg
+pip install pyimgrid pillow
+```
+
+### Dependencias de la interfaz gráfica (Debian APT)
+
+Según la versión de GUI que se quiera usar:
+
+**GTK4** (`gtkimgrid`):
+```bash
+sudo apt install gir1.2-gdkpixbuf-2.0 gir1.2-gtk-4.0 python3 python3-gi python3-pil
+```
+
+**Tkinter** (`tkimgrid`) — requiere también [CairoSVG](https://cairosvg.org/):
+```bash
+sudo apt install python3-cairosvg python3-pil.imagetk python3-tk
+```
+
+**Qt6** (`qtimgrid`):
+```bash
+sudo apt install python3-pyside6.qtcore python3-pyside6.qtgui python3-pyside6.qtwidgets
 ```
 
 ## Uso

@@ -3,15 +3,13 @@ from locale import getlocale, LC_ALL, setlocale
 from pathlib import Path
 from sys import argv, exit
 from re import fullmatch, split
-from PIL import Image
+
+from pyimgrid import create_image
 
 VERSION = '0.0.3'
 
-def detect_lang():
-    setlocale(LC_ALL, '')
-    return (getlocale()[0] or 'en').split('_')[0]
-
-lang = detect_lang()
+setlocale(LC_ALL, '')
+lang = (getlocale()[0] or 'en').split('_')[0]
 
 def msg(n:int):
     m = {
@@ -32,39 +30,6 @@ def msg(n:int):
     }
     print(m.get(lang, m['en'])[n])
     return n
-
-
-def create_image(inp, out, cols, rows, gap, bg):
-    with Image.open(inp) as img:
-
-        canvas_width = (
-            img.width * cols
-            + gap * (cols + 1)
-        )
-
-        canvas_height = (
-            img.height * rows
-            + gap * (rows + 1)
-        )
-
-        if bg is None:
-            bg = '#ffffff'
-            if Path(out).suffix.lower() == '.png':
-                if img.mode == 'RGB':
-                    img = img.convert('RGBA')
-                bg = (0, 0, 0, 0)
-
-        canvas = Image.new(img.mode, (canvas_width, canvas_height), bg)
-
-        for row in range(rows):
-            for col in range(cols):
-
-                pos_x = gap + col * (img.width + gap)
-                pos_y = gap + row * (img.height + gap)
-
-                canvas.paste(img, (pos_x, pos_y))
-
-        canvas.save(out)
 
 
 if __name__ == '__main__':

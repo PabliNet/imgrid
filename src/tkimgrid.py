@@ -1,7 +1,9 @@
+#!/usr/bin/env python3
 """
-image_tool.py — Interfaz gráfica para create_image().
+tkimgrid.py — Interfaz gráfica para create_image().
 """
 
+from locale import getlocale, LC_ALL, setlocale
 from io import BytesIO
 from sys import argv, exit
 import sys
@@ -11,7 +13,12 @@ from tkinter import colorchooser, filedialog
 
 from cairosvg import svg2png
 from PIL import Image, ImageTk
-from imgrid import create_image, lang, VERSION
+from pyimgrid import create_image
+
+VERSION = '0.0.3'
+
+setlocale(LC_ALL, '')
+lang = (getlocale()[0] or 'en').split('_')[0]
 
 
 def _get_pictures_dir():
@@ -25,7 +32,9 @@ def _get_pictures_dir():
 
 
 def _get_base_path():
-    """Devuelve la ruta base: _MEIPASS si compilado, parent.parent si script."""
+    """
+    Devuelve la ruta base: _MEIPASS si compilado, parent.parent si script.
+    """
     if hasattr(sys, '_MEIPASS'):
         return Path(sys._MEIPASS)
     return Path(__file__).parent.parent
@@ -141,6 +150,8 @@ class App(tk.Tk):
     def _set_icon(self):
         """Carga logo.svg y lo establece como ícono de la ventana."""
         svg_path = _get_base_path() / 'imgrid.svg'
+        if not svg_path.is_file():
+            svg_path = Path('/usr/share/pixmaps/imgrid.svg')
         try:
             png_data = svg2png(
                 url=str(svg_path), output_width=64, output_height=64
@@ -419,8 +430,8 @@ class App(tk.Tk):
         # Generar la imagen
         try:
             create_image(
-                inp=inp,
-                out=out,
+                src=inp,
+                dst=out,
                 cols=cols,
                 rows=rows,
                 gap=gap,
