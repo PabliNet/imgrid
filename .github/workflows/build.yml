@@ -1,52 +1,157 @@
-name: Build ImGrid
+name: Build binaries
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build:
+
+  # ─── imgrid (CLI) ── Linux y Windows ──────────────────────────────────────
+  build-imgrid:
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+        include:
+          - os: ubuntu-latest
+            artifact: imgrid
+          - os: windows-latest
+            artifact: imgrid.exe
+
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
+        run: pip install -r requirements.txt pyinstaller
 
-      - name: Build (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          pyinstaller --onefile src/imgrid.py
-          pyinstaller --onefile \
-            --add-data "imgrid.svg:." \
-            --collect-all PIL \
-            src/tkimgrid.py
+      - name: Build imgrid
+        run: >
+          pyinstaller
+          --onefile
+          --name ${{ matrix.artifact }}
+          src/imgrid.py
 
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          pyinstaller --onefile src/imgrid.py
-          pyinstaller --onefile --add-data "imgrid.svg;." --collect-all PIL src/tkimgrid.py
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: imgrid-${{ matrix.os }}
-          path: dist/*
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+
+  # ─── qtimgrid (PySide6) ── Linux y Windows ────────────────────────────────
+  build-qtimgrid:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: qtimgrid
+            extra_deps: >-
+              libgl1
+              libglib2.0-0
+              libdbus-1-3
+              libxcb-xinerama0
+              libxcb-icccm4
+              libxcb-image0
+              libxcb-keysyms1
+              libxcb-render-util0
+              libxcb-shape0
+          - os: windows-latest
+            artifact: qtimgrid.exe
+            extra_deps: ''
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Solo en Linux: instalar librerías de sistema que PySide6 necesita
+      - name: Install system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y ${{ matrix.extra_deps }}
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller PySide6
+
+      - name: Build qtimgrid
+        run: >
+          pyinstaller
+          --onefile
+          --windowed
+          --name ${{ matrix.artifact }}
+          --add-data "imgrid.svg${{ runner.os == 'Windows' && ';.' || ':.' }}"
+          src/qtimgrid.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+
+  # ─── gtkimgrid (GTK4) ── solo Linux ───────────────────────────────────────
+  build-gtkimgrid:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi \
+            python3-gi-cairo \
+            gir1.2-gtk-4.0 \
+            gir1.2-gdkpixbuf-2.0 \
+            libgtk-4-dev \
+            gobject-introspection \
+            libgirepository1.0-dev \
+            pkg-config
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller PyGObject
+
+      - name: Build gtkimgrid
+        run: >
+          pyinstaller
+          --onefile
+          --windowed
+          --name gtkimgrid
+          --add-data "imgrid.svg:."
+          src/gtkimgrid.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gtkimgrid
+          path: dist/gtkimgrid
+
+
+  # ─── Release: adjunta todos los binarios ──────────────────────────────────
+  release:
+    needs: [build-imgrid, build-qtimgrid, build-gtkimgrid]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
