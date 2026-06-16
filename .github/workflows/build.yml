@@ -117,7 +117,8 @@ jobs:
             gir1.2-gdkpixbuf-2.0 \
             libgtk-4-dev \
             gobject-introspection \
-            libgirepository1.0-dev \
+            libgirepository-2.0-dev \
+            gir1.2-girepository-2.0 \
             pkg-config
 
       - name: Install Python dependencies
