@@ -82,13 +82,29 @@ jobs:
         run: pip install -r requirements.txt pyinstaller PySide6
 
       - name: Build qtimgrid
-        run: >
-          pyinstaller
-          --onefile
-          --windowed
-          --name ${{ matrix.artifact }}
-          --add-data "imgrid.svg${{ runner.os == 'Windows' && ';.' || ':.' }}"
-          src/qtimgrid.py
+        run: |
+          # Ruta base de PySide6 instalado por pip
+          PYSIDE6=$(python -c "import PySide6; import os; print(os.path.dirname(PySide6.__file__))")
+
+          # Argumentos comunes
+          ARGS=(
+            --onefile
+            --windowed
+            --name "${{ matrix.artifact }}"
+          )
+
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # Incluir plugin platformthemes/plasma (si existe en el sistema)
+            PLASMA_PLUGIN=$(find /usr -name "libqt6ct.so" -o -name "libqgnomeplatform.so" 2>/dev/null | head -1)
+            if [ -n "$PLASMA_PLUGIN" ]; then
+              ARGS+=(--add-binary "${PLASMA_PLUGIN}:PySide6/Qt/plugins/platformthemes")
+            fi
+            ARGS+=(--add-data "imgrid.svg:.")
+          else
+            ARGS+=(--add-data "imgrid.svg;.")
+          fi
+
+          pyinstaller "${ARGS[@]}" src/qtimgrid.py
 
       - uses: actions/upload-artifact@v4
         with:
@@ -124,14 +140,21 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt pyinstaller PyGObject
 
+      - name: Copy GTK hook to hooks directory
+        run: |
+          mkdir -p hooks
+          cp hooks-src/hook-gi.repository.Gtk.py hooks/
+
       - name: Build gtkimgrid
-        run: >
-          pyinstaller
-          --onefile
-          --windowed
-          --name gtkimgrid
-          --add-data "imgrid.svg:."
-          src/gtkimgrid.py
+        run: |
+          pyinstaller \
+            --onefile \
+            --windowed \
+            --name gtkimgrid \
+            --add-data "imgrid.svg:." \
+            --add-data "/usr/share/glib-2.0/schemas:share/glib-2.0/schemas" \
+            --additional-hooks-dir hooks \
+            src/gtkimgrid.py
 
       - uses: actions/upload-artifact@v4
         with:
