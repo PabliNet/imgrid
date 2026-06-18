@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-gtk-imgrid.py — Interfaz gráfica (GTK4) para create_image().
+gtk-imgrid.py — Interfaz gráfica (GTK3) para create_image().
 """
 
 import gi
-gi.require_version('Gtk', '4.0')
+gi.require_version('Gtk', '3.0')
 
 from locale import getlocale, LC_ALL, setlocale
 from os import environ
@@ -20,7 +20,7 @@ from gi.repository import GObject, Gtk, Gdk, Gio, GLib, GdkPixbuf
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.0.3'
+VERSION = '0.1.0'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -148,7 +148,8 @@ class AppWindow(Gtk.ApplicationWindow):
         # Id del timeout de debounce para regenerar la vista previa
         self._preview_timeout_id = None
 
-        self.connect('close-request', self._on_close_request)
+        # GTK3: 'delete-event' en lugar de 'close-request'
+        self.connect('delete-event', self._on_delete_event)
 
         self._build_ui()
 
@@ -164,19 +165,16 @@ class AppWindow(Gtk.ApplicationWindow):
             if not candidate.is_file():
                 continue
             try:
-                # GTK4 requiere estructura XDG para add_search_path:
-                # <dir>/hicolor/scalable/apps/<name>.svg
-                # Creamos esa estructura en un directorio temporal.
+                # GTK3: se puede añadir la ruta directamente al tema de íconos,
+                # sin necesidad de la estructura XDG completa de GTK4.
                 icon_dir = Path(mkdtemp(prefix='gtkimgrid_icon_'))
                 scalable = icon_dir / 'hicolor' / 'scalable' / 'apps'
                 scalable.mkdir(parents=True)
                 copy(candidate, scalable / 'imgrid.svg')
-                self._icon_tmp_dir = icon_dir   # mantener referencia para limpieza
+                self._icon_tmp_dir = icon_dir
 
-                icon_theme = Gtk.IconTheme.get_for_display(
-                    Gdk.Display.get_default()
-                )
-                icon_theme.add_search_path(str(icon_dir))
+                icon_theme = Gtk.IconTheme.get_default()
+                icon_theme.append_search_path(str(icon_dir))
                 self.set_icon_name('imgrid')
             except Exception:
                 pass
@@ -191,34 +189,42 @@ class AppWindow(Gtk.ApplicationWindow):
         root.set_margin_bottom(12)
         root.set_margin_start(12)
         root.set_margin_end(12)
-        self.set_child(root)
+        # GTK3: add() en lugar de set_child()
+        self.add(root)
 
         # ── LOAD IMAGE ──────────────────────────────────────────────
         self._btn_open = Gtk.Button(label=tk_msg('load_image'))
         self._btn_open.connect('clicked', self._on_open_clicked)
-        root.append(self._btn_open)
+        root.pack_start(self._btn_open, False, False, 0)
 
         # Ruta de la imagen seleccionada
         self._lbl_image = Gtk.Label(label='')
         self._lbl_image.set_justify(Gtk.Justification.CENTER)
-        self._lbl_image.set_wrap(True)
-        root.append(self._lbl_image)
+        self._lbl_image.set_line_wrap(True)
+        root.pack_start(self._lbl_image, False, False, 0)
 
-        # Vista previa de la imagen generada (admite arrastrar y soltar)
-        self._lbl_preview = Gtk.Picture()
-        self._lbl_preview.set_can_shrink(True)
-        self._lbl_preview.set_content_fit(Gtk.ContentFit.CONTAIN)
-        self._lbl_preview.set_vexpand(True)
+        # Vista previa de la imagen generada
+        # GTK3: Gtk.Picture no existe; se usa Gtk.Image dentro de un EventBox
+        # para poder recibir drops.
+        self._lbl_preview = Gtk.Image()
         self._lbl_preview.set_size_request(-1, 160)
 
+        preview_event_box = Gtk.EventBox()
+        preview_event_box.add(self._lbl_preview)
+
         preview_frame = Gtk.Frame()
-        preview_frame.set_child(self._lbl_preview)
+        preview_frame.add(preview_event_box)
 
-        drop_target = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.COPY)
-        drop_target.connect('drop', self._on_drop)
-        preview_frame.add_controller(drop_target)
+        # GTK3: drag-and-drop con la API clásica
+        preview_event_box.drag_dest_set(
+            Gtk.DestDefaults.ALL,
+            [Gtk.TargetEntry.new('text/uri-list', 0, 0),
+             Gtk.TargetEntry.new('text/plain',    0, 1)],
+            Gdk.DragAction.COPY,
+        )
+        preview_event_box.connect('drag-data-received', self._on_drag_data_received)
 
-        root.append(preview_frame)
+        root.pack_start(preview_frame, True, True, 0)
 
         # ── COLUMNAS / FILAS / SEPARADOR ─────────────────────────────
         box_crg = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -234,7 +240,7 @@ class AppWindow(Gtk.ApplicationWindow):
             box_crg, tk_msg('lbl_gap'), default=5, min_val=0
         )
 
-        root.append(box_crg)
+        root.pack_start(box_crg, False, False, 0)
 
         # ── BACKGROUND ───────────────────────────────────────────────
         box_bg = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -242,47 +248,53 @@ class AppWindow(Gtk.ApplicationWindow):
         self._btn_bg = Gtk.Button(label=tk_msg('background'))
         self._btn_bg.set_hexpand(True)
         self._btn_bg.connect('clicked', self._on_pick_color)
-        box_bg.append(self._btn_bg)
+        box_bg.pack_start(self._btn_bg, True, True, 0)
 
         # Botón para resetear el fondo a transparente (ícono "edit-clear")
         self._btn_reset_bg = Gtk.Button()
-        self._btn_reset_bg.set_icon_name('edit-clear-symbolic')
+        self._btn_reset_bg.set_image(
+            Gtk.Image.new_from_icon_name('edit-clear-symbolic', Gtk.IconSize.BUTTON)
+        )
         self._btn_reset_bg.set_size_request(36, -1)
         self._btn_reset_bg.connect('clicked', self._on_reset_color)
-        box_bg.append(self._btn_reset_bg)
+        box_bg.pack_start(self._btn_reset_bg, False, False, 0)
 
-        root.append(box_bg)
+        root.pack_start(box_bg, False, False, 0)
 
         # Hex del color elegido o "Transparente" por defecto
         self._lbl_color = Gtk.Label(label=tk_msg('transparent'))
         self._lbl_color.set_justify(Gtk.Justification.CENTER)
-        root.append(self._lbl_color)
+        root.pack_start(self._lbl_color, False, False, 0)
 
         # ── SAVE IMAGE ───────────────────────────────────────────────
         self._btn_gen = Gtk.Button(label=tk_msg('save_image'))
         self._btn_gen.connect('clicked', self._on_generate_clicked)
-        root.append(self._btn_gen)
+        root.pack_start(self._btn_gen, False, False, 0)
 
         # ── MENSAJE DE ESTADO ────────────────────────────────────────
         box_status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         self._lbl_status = Gtk.Label(label='')
-        self._lbl_status.set_wrap(True)
+        self._lbl_status.set_line_wrap(True)
         self._lbl_status.set_xalign(0.0)
         self._lbl_status.set_hexpand(True)
-        box_status.append(self._lbl_status)
+        box_status.pack_start(self._lbl_status, True, True, 0)
 
         self._btn_open_folder = Gtk.Button(label=tk_msg('open_folder'))
         self._btn_open_folder.connect('clicked', self._on_open_folder_clicked)
-        self._btn_open_folder.set_visible(False)
-        box_status.append(self._btn_open_folder)
+        self._btn_open_folder.set_no_show_all(True)
+        self._btn_open_folder.hide()
+        box_status.pack_start(self._btn_open_folder, False, False, 0)
 
         self._btn_view_image = Gtk.Button(label=tk_msg('view_image'))
         self._btn_view_image.connect('clicked', self._on_view_image_clicked)
-        self._btn_view_image.set_visible(False)
-        box_status.append(self._btn_view_image)
+        self._btn_view_image.set_no_show_all(True)
+        self._btn_view_image.hide()
+        box_status.pack_start(self._btn_view_image, False, False, 0)
 
-        root.append(box_status)
+        root.pack_start(box_status, False, False, 0)
+
+        self.show_all()
 
     # ------------------------------------------------------------------
     # Helpers de construcción
@@ -293,7 +305,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
         lbl = Gtk.Label(label=label)
         lbl.set_justify(Gtk.Justification.CENTER)
-        frame.append(lbl)
+        frame.pack_start(lbl, False, False, 0)
 
         adjustment = Gtk.Adjustment(
             value=default,
@@ -308,9 +320,9 @@ class AppWindow(Gtk.ApplicationWindow):
         spin.set_numeric(True)
         spin.set_halign(Gtk.Align.CENTER)
         spin.connect('value-changed', self._on_spin_changed)
-        frame.append(spin)
+        frame.pack_start(spin, False, False, 0)
 
-        parent_box.append(frame)
+        parent_box.pack_start(frame, True, True, 0)
         return spin
 
     def _set_status_color(self, label, color, bold=True):
@@ -329,15 +341,19 @@ class AppWindow(Gtk.ApplicationWindow):
         self._lbl_status.set_text(text)
         markup = GLib.markup_escape_text(text)
         self._lbl_status.set_markup(f'<b>{markup}</b>')
-        self._btn_open_folder.set_visible(with_actions)
-        self._btn_view_image.set_visible(with_actions)
+        if with_actions:
+            self._btn_open_folder.show()
+            self._btn_view_image.show()
+        else:
+            self._btn_open_folder.hide()
+            self._btn_view_image.hide()
 
     def _show_error(self, text):
         """Muestra un mensaje de error en rojo y negrita."""
         self._lbl_status.set_text(text)
         self._set_status_color(self._lbl_status, self.ERROR_COLOR)
-        self._btn_open_folder.set_visible(False)
-        self._btn_view_image.set_visible(False)
+        self._btn_open_folder.hide()
+        self._btn_view_image.hide()
 
     # ------------------------------------------------------------------
     # Callbacks
@@ -347,37 +363,44 @@ class AppWindow(Gtk.ApplicationWindow):
         self._image_path = path
         self._lbl_image.set_text(path)
         self._btn_open.set_label(Path(path).name)
-        self._lbl_status.set_text('')    # limpia estado anterior
-        self._btn_open_folder.set_visible(False)
-        self._btn_view_image.set_visible(False)
+        self._lbl_status.set_text('')
+        self._btn_open_folder.hide()
+        self._btn_view_image.hide()
         self._make_preview_source(path)
         self._schedule_preview()
 
-    def _on_drop(self, drop_target, value, x, y):
-        """Maneja el drop de un archivo sobre la vista previa."""
-        # value puede llegar como URI ("file:///ruta") o como ruta directa
-        if not isinstance(value, str):
-            return False
-        uri = value.strip().splitlines()[0].strip()
+    def _on_drag_data_received(self, widget, drag_context, x, y,
+                               selection_data, info, time):
+        """Maneja el drop de un archivo sobre la vista previa (GTK3)."""
+        raw = selection_data.get_data()
+        if not raw:
+            Gtk.drag_finish(drag_context, False, False, time)
+            return
+        text = raw.decode('utf-8', errors='replace').strip()
+        uri = text.splitlines()[0].strip()
         if uri.startswith('file://'):
             path = Gio.File.new_for_uri(uri).get_path()
         else:
             path = uri
         if path and path.lower().endswith(VALID_EXTENSIONS):
             self._load_image(path)
-            return True
-        return False
+            Gtk.drag_finish(drag_context, True, False, time)
+        else:
+            Gtk.drag_finish(drag_context, False, False, time)
 
     def _on_open_clicked(self, button):
         """Abre el diálogo para seleccionar la imagen de entrada."""
-        dialog = Gtk.FileChooserNative.new(
-            tk_msg('open_title'),
-            self,
-            Gtk.FileChooserAction.OPEN,
-            None,
-            None,
+        # GTK3: Gtk.FileChooserNative existe pero FileChooserDialog es más compatible
+        dialog = Gtk.FileChooserDialog(
+            title=tk_msg('open_title'),
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN,
         )
-        dialog.set_current_folder(Gio.File.new_for_path(str(_get_pictures_dir())))
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN,   Gtk.ResponseType.ACCEPT,
+        )
+        dialog.set_current_folder(str(_get_pictures_dir()))
 
         filter_images = Gtk.FileFilter()
         filter_images.set_name(tk_msg('open_types'))
@@ -391,25 +414,16 @@ class AppWindow(Gtk.ApplicationWindow):
         dialog.add_filter(filter_all)
         dialog.set_filter(filter_images)
 
-        dialog.connect('response', self._on_open_dialog_response)
-        dialog.show()
-        self._open_dialog = dialog    # mantener referencia viva
-
-    def _on_open_dialog_response(self, dialog, response):
+        response = dialog.run()
         if response == Gtk.ResponseType.ACCEPT:
-            file = dialog.get_file()
-            if file:
-                path = file.get_path()
-                if path:
-                    self._load_image(path)
+            path = dialog.get_filename()
+            if path:
+                self._load_image(path)
         dialog.destroy()
-        self._open_dialog = None
 
     def _on_reset_color(self, button):
         """Resetea el fondo a transparente (None)."""
         self._bg_color = None
-        self._btn_bg.set_name('')
-        self._btn_bg.remove_css_class('bg-color-button')
         ctx = self._btn_bg.get_style_context()
         provider = getattr(self, '_bg_css_provider', None)
         if provider is not None:
@@ -423,16 +437,16 @@ class AppWindow(Gtk.ApplicationWindow):
 
     def _on_pick_color(self, button):
         """Abre el selector de color para el fondo."""
-        dialog = Gtk.ColorChooserDialog(title=tk_msg('color_title'), transient_for=self)
+        # GTK3: Gtk.ColorChooserDialog (disponible desde GTK 3.4)
+        dialog = Gtk.ColorChooserDialog(
+            title=tk_msg('color_title'),
+            transient_for=self,
+        )
         if self._bg_color:
             rgba = Gdk.RGBA()
             rgba.parse(self._bg_color)
             dialog.set_rgba(rgba)
-        dialog.connect('response', self._on_color_dialog_response)
-        dialog.show()
-        self._color_dialog = dialog    # mantener referencia viva
-
-    def _on_color_dialog_response(self, dialog, response):
+        response = dialog.run()
         if response == Gtk.ResponseType.OK:
             rgba = dialog.get_rgba()
             color = '#{:02x}{:02x}{:02x}'.format(
@@ -456,7 +470,6 @@ class AppWindow(Gtk.ApplicationWindow):
             self._set_status_color(self._lbl_color, color, bold=False)
             self._schedule_preview()
         dialog.destroy()
-        self._color_dialog = None
 
     def _on_spin_changed(self, spin):
         self._schedule_preview()
@@ -465,11 +478,11 @@ class AppWindow(Gtk.ApplicationWindow):
         """Crea una copia reducida de la imagen para usar en la preview."""
         try:
             with Image.open(path) as img:
-                copy = img.copy()
-                copy.thumbnail(
+                copy_img = img.copy()
+                copy_img.thumbnail(
                     (self.PREVIEW_MAX_SIZE, self.PREVIEW_MAX_SIZE)
                 )
-                copy.save(self._preview_src_path, format='PNG')
+                copy_img.save(self._preview_src_path, format='PNG')
             self._preview_src_ready = True
         except Exception:
             self._preview_src_ready = False
@@ -519,16 +532,17 @@ class AppWindow(Gtk.ApplicationWindow):
             self._apply_preview_pixbuf()
         except Exception:
             self._preview_pixbuf = None
-            self._lbl_preview.set_paintable(None)
+            # GTK3: limpiar la imagen del widget Gtk.Image
+            self._lbl_preview.clear()
 
     def _apply_preview_pixbuf(self):
-        """Aplica el pixbuf de la preview al Gtk.Picture."""
+        """Aplica el pixbuf de la preview al Gtk.Image."""
         if self._preview_pixbuf is None:
             return
-        texture = Gdk.Texture.new_for_pixbuf(self._preview_pixbuf)
-        self._lbl_preview.set_paintable(texture)
+        # GTK3: Gtk.Image.set_from_pixbuf() en lugar de Gdk.Texture
+        self._lbl_preview.set_from_pixbuf(self._preview_pixbuf)
 
-    def _on_close_request(self, window):
+    def _on_delete_event(self, window, event):
         """Detiene timers y elimina los archivos temporales de vista previa al cerrar."""
         if self._preview_timeout_id is not None:
             GLib.source_remove(self._preview_timeout_id)
@@ -561,8 +575,6 @@ class AppWindow(Gtk.ApplicationWindow):
             elif system == 'Darwin':
                 Popen(['open', '-R', str(path)])
             else:
-                # Linux: elegir gestor de archivos según el entorno de
-                # escritorio activo, con alternativas como respaldo.
                 desktop = environ.get('XDG_CURRENT_DESKTOP', '').lower()
 
                 candidates = [
@@ -576,33 +588,19 @@ class AppWindow(Gtk.ApplicationWindow):
                 ]
 
                 if 'kde' in desktop or 'plasma' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'dolphin' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'dolphin' else 1)
                 elif 'gnome' in desktop or 'unity' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'nautilus' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'nautilus' else 1)
                 elif 'x-cinnamon' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'nemo' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'nemo' else 1)
                 elif 'mate' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'caja' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'caja' else 1)
                 elif 'xfce' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'thunar' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'thunar' else 1)
                 elif 'lxqt' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'pcmanfm-qt' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'pcmanfm-qt' else 1)
                 elif 'lxde' in desktop:
-                    candidates.sort(
-                        key=lambda c: 0 if c[0] == 'pcmanfm' else 1
-                    )
+                    candidates.sort(key=lambda c: 0 if c[0] == 'pcmanfm' else 1)
 
                 opened = False
                 for cmd in candidates:
@@ -638,7 +636,6 @@ class AppWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
     def _on_generate_clicked(self, button):
         """Valida los campos, pide ruta de salida y llama a create_image."""
-        # Validar imagen de entrada
         inp = self._image_path.strip()
         if not inp:
             self._show_error(tk_msg('err_no_img'))
@@ -648,21 +645,23 @@ class AppWindow(Gtk.ApplicationWindow):
         rows = self._spin_rows.get_value_as_int()
         gap  = self._spin_gap.get_value_as_int()
 
-        # Elegir ruta de salida con nombre sugerido
         inp_path  = Path(inp)
         suggested = f'{inp_path.stem}_{cols}x{rows}'
 
-        dialog = Gtk.FileChooserNative.new(
-            tk_msg('save_title'),
-            self,
-            Gtk.FileChooserAction.SAVE,
-            None,
-            None,
+        # GTK3: Gtk.FileChooserDialog para guardar
+        dialog = Gtk.FileChooserDialog(
+            title=tk_msg('save_title'),
+            parent=self,
+            action=Gtk.FileChooserAction.SAVE,
         )
-        dialog.set_current_folder(Gio.File.new_for_path(str(inp_path.parent)))
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_SAVE,   Gtk.ResponseType.ACCEPT,
+        )
+        dialog.set_do_overwrite_confirmation(True)
+        dialog.set_current_folder(str(inp_path.parent))
         dialog.set_current_name(suggested + inp_path.suffix)
 
-        # El tipo de la imagen de entrada va primero en la lista
         ext = inp_path.suffix.lower()
         filter_jpeg = Gtk.FileFilter()
         filter_jpeg.set_name('JPEG')
@@ -686,48 +685,29 @@ class AppWindow(Gtk.ApplicationWindow):
             dialog.add_filter(f)
         dialog.set_filter(order[0])
 
-        self._gen_params = (inp, inp_path, cols, rows, gap)
-        dialog.connect('response', self._on_save_dialog_response)
-        dialog.show()
-        self._save_dialog = dialog    # mantener referencia viva
-
-    def _on_save_dialog_response(self, dialog, response):
-        if response != Gtk.ResponseType.ACCEPT:
+        response = dialog.run()
+        if response == Gtk.ResponseType.ACCEPT:
+            out = dialog.get_filename()
             dialog.destroy()
-            self._save_dialog = None
-            return
 
-        file = dialog.get_file()
-        dialog.destroy()
-        self._save_dialog = None
-
-        if not file:
-            return
-
-        out = file.get_path()
-        if not out:
-            return
-
-        inp, inp_path, cols, rows, gap = self._gen_params
-
-        # Si el usuario no especificó extensión, usar la de origen
-        if not Path(out).suffix:
-            out = out + inp_path.suffix
-
-        # Generar la imagen
-        try:
-            create_image(
-                src=inp,
-                dst=out,
-                cols=cols,
-                rows=rows,
-                gap=gap,
-                bg=self._bg_color,
-            )
-            self._output_path = out
-            self._show_ok(tk_msg('ok_msg'), with_actions=True)
-        except Exception as e:
-            self._show_error(str(e))
+            if out:
+                if not Path(out).suffix:
+                    out = out + inp_path.suffix
+                try:
+                    create_image(
+                        src=inp,
+                        dst=out,
+                        cols=cols,
+                        rows=rows,
+                        gap=gap,
+                        bg=self._bg_color,
+                    )
+                    self._output_path = out
+                    self._show_ok(tk_msg('ok_msg'), with_actions=True)
+                except Exception as e:
+                    self._show_error(str(e))
+        else:
+            dialog.destroy()
 
 
 # ---------------------------------------------------------------------------
