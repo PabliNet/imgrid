@@ -64,9 +64,44 @@ jobs:
           path: dist/qtimgrid.exe
 
 
+  # ─── imgridroid (Kivy) ── Android ─────────────────────────────────────────
+  build-imgridroid:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # El proyecto Android vive en su propia carpeta (imgridroid/), con
+      # su propio buildozer.spec y código fuente en imgridroid/src/.
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer
+          key: buildozer-global-${{ hashFiles('imgridroid/buildozer.spec') }}
+
+      - name: Cache Buildozer project directory
+        uses: actions/cache@v4
+        with:
+          path: imgridroid/.buildozer
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('imgridroid/buildozer.spec') }}
+
+      - name: Build Imgridroid APK
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: imgridroid
+          buildozer_version: stable
+          command: buildozer android debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imgridroid.apk
+          path: ${{ steps.buildozer.outputs.filename }}
+
+
   # ─── Release: adjunta todos los binarios ──────────────────────────────────
   release:
-    needs: [build-imgrid, build-qtimgrid]
+    needs: [build-imgrid, build-qtimgrid, build-imgridroid]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:

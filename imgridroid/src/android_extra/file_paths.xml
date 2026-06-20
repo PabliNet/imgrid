@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache interna de la app: ahí vive el resultado recién generado
+         antes de compartirlo (no es la carpeta donde el usuario guarda
+         explícitamente, ver external-path Pictures/Imgridroid abajo). -->
+    <cache-path name="imgridroid_cache" path="." />
+
+    <!-- Carpeta propia en almacenamiento externo donde se guardan los
+         resultados cuando el usuario toca "Guardar" (Pictures/Imgridroid,
+         separada de DCIM/Camera). -->
+    <external-path name="imgridroid_pictures" path="Pictures/Imgridroid" />
+</paths>
