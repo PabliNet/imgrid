@@ -65,18 +65,22 @@ jobs:
 
 
   # ─── imgridroid (Kivy) ── Android ─────────────────────────────────────────
+  # Se usa la imagen Docker oficial de kivy/buildozer directamente (en vez
+  # de la action ArtemSBulgakov/buildozer-action), porque el Dockerfile de
+  # esa action agrega el PPA openjdk-r para instalar Java, y ese PPA puede
+  # no tener paquetes publicados para la versión de Ubuntu de turno. La
+  # imagen oficial instala Java desde los repos de Ubuntu directamente, sin
+  # depender de ese PPA externo.
   build-imgridroid:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      # El proyecto Android vive en su propia carpeta (imgridroid/), con
-      # su propio buildozer.spec y código fuente en imgridroid/src/.
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
         with:
-          path: ~/.buildozer
+          path: .buildozer_global
           key: buildozer-global-${{ hashFiles('imgridroid/buildozer.spec') }}
 
       - name: Cache Buildozer project directory
@@ -85,18 +89,37 @@ jobs:
           path: imgridroid/.buildozer
           key: ${{ runner.os }}-buildozer-${{ hashFiles('imgridroid/buildozer.spec') }}
 
+      - name: Pull kivy/buildozer image
+        run: docker pull kivy/buildozer:latest
+
       - name: Build Imgridroid APK
-        uses: ArtemSBulgakov/buildozer-action@v1
-        id: buildozer
-        with:
-          workdir: imgridroid
-          buildozer_version: stable
-          command: buildozer android debug
+        run: |
+          mkdir -p "${{ github.workspace }}/.buildozer_global"
+          docker run --rm \
+            --volume "${{ github.workspace }}/.buildozer_global":/home/user/.buildozer \
+            --volume "${{ github.workspace }}/imgridroid":/home/user/hostcwd \
+            kivy/buildozer:latest android debug
+
+      # El contenedor escribe como un usuario distinto al del runner; si
+      # algún paso posterior (subir artifacts, cachear) tropieza con
+      # permisos, esto deja todo legible/escribible de vuelta para el
+      # runner. El propio Dockerfile de kivy/buildozer documenta este
+      # mismo problema con /home/user/.buildozer/cache.
+      - name: Fix permissions after container build
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" "${{ github.workspace }}/imgridroid" "${{ github.workspace }}/.buildozer_global"
+
+      - name: Locate built APK
+        id: locate_apk
+        run: |
+          APK_PATH=$(find imgridroid/bin -name '*.apk' | head -n 1)
+          echo "Found: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
           name: imgridroid.apk
-          path: ${{ steps.buildozer.outputs.filename }}
+          path: ${{ steps.locate_apk.outputs.apk_path }}
 
 
   # ─── Release: adjunta todos los binarios ──────────────────────────────────
