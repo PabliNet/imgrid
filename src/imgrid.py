@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from locale import getlocale, LC_ALL, setlocale
 from pathlib import Path
+from platform import system as platform_system
 from sys import argv, exit
 from re import fullmatch, split
 
@@ -8,8 +9,32 @@ from pyimgrid import create_image
 
 VERSION = '0.0.3'
 
-setlocale(LC_ALL, '')
-lang = (getlocale()[0] or 'en').split('_')[0]
+
+def _get_windows_lang():
+    """Devuelve el código de idioma corto (ej: 'es', 'en') en Windows."""
+    import ctypes
+    windll = ctypes.windll.kernel32
+    lcid = windll.GetUserDefaultUILanguage()
+    # Buffer para el nombre del locale (ej: "es-AR", "en-US")
+    buf = ctypes.create_unicode_buffer(85)
+    windll.LCIDToLocaleName(lcid, buf, 85, 0)
+    if buf.value:
+        return buf.value.split('-')[0]  # "es-AR" -> "es"
+    return 'en'
+
+
+def _detect_lang():
+    """Detecta el idioma del sistema (con rama específica para Windows)."""
+    if platform_system() == 'Windows':
+        try:
+            return _get_windows_lang()
+        except Exception:
+            return 'en'
+    setlocale(LC_ALL, '')
+    return (getlocale()[0] or 'en').split('_')[0]
+
+
+lang = _detect_lang()
 
 def msg(n:int):
     m = {
