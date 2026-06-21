@@ -16,8 +16,8 @@ orientation = portrait,landscape
 
 # ── Android ────────────────────────────────────────────────────────────
 android.api = 34
-android.minapi = 23
-android.ndk_api = 23
+android.minapi = 24
+android.ndk_api = 24
 android.archs = arm64-v8a,armeabi-v7a
 
 # Acepta automáticamente las licencias del Android SDK. Necesario para que
