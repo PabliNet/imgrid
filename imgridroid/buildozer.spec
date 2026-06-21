@@ -20,6 +20,13 @@ android.minapi = 23
 android.ndk_api = 23
 android.archs = arm64-v8a,armeabi-v7a
 
+# Acepta automáticamente las licencias del Android SDK. Necesario para que
+# el build corra sin intervención manual en GitHub Actions (sin esto,
+# buildozer pregunta "Accept? (y/N)" de forma interactiva y, en CI, eso
+# se interpreta como "no" — se saltea la instalación de build-tools y el
+# build falla más adelante por falta de aidl).
+android.accept_sdk_license = True
+
 # Permisos:
 #  - READ_MEDIA_IMAGES (Android 13+) / READ_EXTERNAL_STORAGE (Android <13):
 #    necesarios para que el usuario elija una imagen manualmente.
