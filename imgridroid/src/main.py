@@ -138,6 +138,11 @@ def request_storage_permissions():
     y WRITE_EXTERNAL_STORAGE en runtime, además de los declarados en el
     manifest.  Sin este paso el selector de archivos y la lectura de
     imágenes compartidas fallaban silenciosamente en Android 6+.
+
+    Nota de import: en python-for-android el módulo 'android' no existe
+    como paquete independiente; los submódulos se importan directamente
+    (android.permissions, android.storage, etc.).  Build.VERSION se obtiene
+    vía jnius, no via 'import android'.
     """
     if platform != 'android':
         return
@@ -145,13 +150,12 @@ def request_storage_permissions():
         from android.permissions import (  # noqa
             request_permissions, Permission,
         )
-        import android  # noqa  – necesario para que el módulo esté disponible
-        sdk_int = android.os.Build.VERSION.SDK_INT  # type: ignore[attr-defined]
+        from jnius import autoclass
+        Build = autoclass('android.os.Build$VERSION')
+        sdk_int = Build.SDK_INT
         if sdk_int >= 33:
-            # Android 13+: el permiso granular reemplaza a READ_EXTERNAL_STORAGE
-            perms = [
-                Permission.READ_MEDIA_IMAGES,
-            ]
+            # Android 13+: permiso granular de imágenes
+            perms = [Permission.READ_MEDIA_IMAGES]
         else:
             perms = [
                 Permission.READ_EXTERNAL_STORAGE,
@@ -443,24 +447,36 @@ class ImgridroidApp(App):
 
     def _set_source_image(self, path: str):
         self.source_path = path
-        self.preview_source = path  # mientras se genera la primer preview
-        self._build_preview_copy(path)
-        self._schedule_preview_update()
+        # Mostrar la imagen original inmediatamente mientras se genera el
+        # preview reducido. preview_source NO se toca hasta que el hilo
+        # secundario termine con éxito.
+        self.root.ids.preview_image.source = path
+        # Construir la copia reducida en un hilo para no bloquear la UI.
+        Thread(target=self._build_preview_copy_bg, args=(path,),
+               daemon=True).start()
 
-    def _build_preview_copy(self, path: str):
-        """Genera una copia reducida (PREVIEW_MAX_SIDE) para que el recálculo
-        en vivo del grid sea rápido sin importar el tamaño de la foto
-        original."""
+    def _build_preview_copy_bg(self, path: str):
+        """Genera una copia reducida (PREVIEW_MAX_SIDE) en hilo secundario."""
         try:
             from PIL import Image as PILImage
             with PILImage.open(path) as im:
                 im.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
                 dest = join(get_cache_dir(), 'preview_source.png')
                 im.save(dest)
-                self.preview_source_path = dest
+            Clock.schedule_once(
+                lambda dt: self._on_preview_copy_ready(dest)
+            )
         except Exception as e:
             print(f'[Imgridroid] _build_preview_copy error: {e}')
-            self.preview_source_path = path
+            # Fallback: usar la imagen original directamente para el preview
+            Clock.schedule_once(
+                lambda dt: self._on_preview_copy_ready(path)
+            )
+
+    @mainthread
+    def _on_preview_copy_ready(self, preview_path: str):
+        self.preview_source_path = preview_path
+        self._schedule_preview_update()
 
     # ── Color de fondo ──────────────────────────────────────────────────
     def open_color_picker(self):
@@ -501,17 +517,18 @@ class ImgridroidApp(App):
         ), daemon=True).start()
 
     @mainthread
-    def _on_preview_ready(self, ok: bool, out_path: str, _err):
+    def _on_preview_ready(self, ok: bool, out_path: str, err):
         if ok:
-            # Bug 1 fix: Kivy cachea texturas por nombre de archivo y no
-            # detecta cambios en disco por sí solo. Limpiamos la entrada
-            # del cache explícitamente y añadimos un sufijo ?t=<timestamp>
-            # al source para que Kivy trate cada actualización como una
-            # URL nueva (truco estándar para evitar el stale-texture bug).
-            from kivy.cache import Cache
-            Cache.remove('kv.image', out_path)
-            Cache.remove('kv.texture', out_path)
-            self.preview_source = f'{out_path}?t={time.monotonic()}'
+            # Kivy no detecta cambios en disco con el mismo nombre de archivo.
+            # Solución: poner source='' y luego el path real en el mismo
+            # frame del hilo principal. Solo hacemos esto cuando sabemos que
+            # el archivo existe (ok=True), para nunca quedar con widget vacío.
+            img = self.root.ids.preview_image
+            img.source = ''
+            img.source = out_path
+        else:
+            # Si el preview falló, mantenemos lo que había (imagen original).
+            print(f'[Imgridroid] preview generation failed: {err}')
 
     # ── Generación final (resolución completa) ──────────────────────────
     def generate_full(self):
