@@ -63,6 +63,10 @@ android.manifest.intent_filters = src/android_extra/intent_filters.xml
 # Habilita AndroidX, requerido por androidx.core.content.FileProvider.
 android.enable_androidx = True
 
+# androidx.core debe declararse explícitamente — enable_androidx solo
+# activa la migración de namespaces pero no descarga la librería.
+android.gradle_dependencies = androidx.core:core:1.13.1
+
 # Ícono y splash (reemplazar por los assets reales del proyecto).
 icon.filename = %(source.dir)s/icon.png
 # presplash.filename = %(source.dir)s/presplash.png

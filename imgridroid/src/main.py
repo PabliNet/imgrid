@@ -460,9 +460,14 @@ class ImgridroidApp(App):
         """Genera una copia reducida (PREVIEW_MAX_SIDE) en hilo secundario."""
         try:
             from PIL import Image as PILImage
+            import hashlib
+            # Nombre único por imagen: evita que dos hilos simultáneos
+            # (usuario carga una segunda imagen antes de que termine el
+            # primero) escriban sobre el mismo archivo y lo corrompan.
+            tag = hashlib.md5(path.encode()).hexdigest()[:8]
+            dest = join(get_cache_dir(), f'preview_src_{tag}.png')
             with PILImage.open(path) as im:
                 im.thumbnail((PREVIEW_MAX_SIDE, PREVIEW_MAX_SIDE))
-                dest = join(get_cache_dir(), 'preview_source.png')
                 im.save(dest)
             Clock.schedule_once(
                 lambda dt: self._on_preview_copy_ready(dest)
@@ -499,7 +504,8 @@ class ImgridroidApp(App):
     # ── Sliders: columnas / filas / gap ─────────────────────────────────
     def on_param_change(self, name: str, value):
         setattr(self, name, int(value))
-        self._schedule_preview_update()
+        if self.preview_source_path:
+            self._schedule_preview_update()
 
     def _schedule_preview_update(self):
         if not self.preview_source_path:
@@ -546,17 +552,13 @@ class ImgridroidApp(App):
     @mainthread
     def _on_preview_ready(self, ok: bool, out_path: str, err):
         if ok:
-            # Actualizar la KVProperty que el widget Image tiene bindeada
-            # (source: app.preview_source). Manipular img.source directamente
-            # era incorrecto: Kivy podía revertirlo al re-evaluar el binding,
-            # por eso los sliders/color no actualizaban la preview.
-            #
-            # El truco source='' + source=path no alcanza cuando el archivo
-            # en disco cambia pero el path es el mismo (Kivy cachea por path).
-            # reload() fuerza descartar la textura cacheada.
-            self.preview_source = out_path
+            # Kivy no detecta cambios en disco con el mismo nombre de archivo.
+            # Solución: poner source='' y luego el path real en el mismo
+            # frame del hilo principal. Solo hacemos esto cuando sabemos que
+            # el archivo existe (ok=True), para nunca quedar con widget vacío.
             img = self.root.ids.preview_image
-            img.reload()
+            img.source = ''
+            img.source = out_path
         else:
             # Si el preview falló, mantenemos lo que había (imagen original).
             print(f'[Imgridroid] preview generation failed: {err}')
@@ -600,11 +602,7 @@ class ImgridroidApp(App):
     def on_share(self):
         if not self.has_result:
             return
-        try:
-            share_file(self.result_path)
-        except Exception as e:
-            self.status_text = t('save_error')
-            print(f'[Imgridroid] on_share error: {e}')
+        share_file(self.result_path)
 
     def on_save(self):
         if not self.has_result:
