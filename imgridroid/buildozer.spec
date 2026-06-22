@@ -64,7 +64,7 @@ android.manifest.intent_filters = src/android_extra/intent_filters.xml
 android.enable_androidx = True
 
 # Ícono y splash (reemplazar por los assets reales del proyecto).
-# icon.filename = %(source.dir)s/icon.png
+icon.filename = %(source.dir)s/icon.png
 # presplash.filename = %(source.dir)s/presplash.png
 
 fullscreen = 0

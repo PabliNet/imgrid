@@ -11,6 +11,7 @@ Flujo:
   - Al tocar "Generar", se corre pyimgrid sobre la imagen a resolución
     completa, y el resultado se puede Compartir o Guardar.
 """
+import time
 from os import makedirs
 from os.path import join, basename, splitext
 from shutil import copyfile
@@ -130,6 +131,38 @@ def get_cache_dir() -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# Permisos en runtime (Android 6+)
+# ─────────────────────────────────────────────────────────────────────────
+def request_storage_permissions():
+    """Pide READ_MEDIA_IMAGES (Android 13+) o READ_EXTERNAL_STORAGE (<13)
+    y WRITE_EXTERNAL_STORAGE en runtime, además de los declarados en el
+    manifest.  Sin este paso el selector de archivos y la lectura de
+    imágenes compartidas fallaban silenciosamente en Android 6+.
+    """
+    if platform != 'android':
+        return
+    try:
+        from android.permissions import (  # noqa
+            request_permissions, Permission,
+        )
+        import android  # noqa  – necesario para que el módulo esté disponible
+        sdk_int = android.os.Build.VERSION.SDK_INT  # type: ignore[attr-defined]
+        if sdk_int >= 33:
+            # Android 13+: el permiso granular reemplaza a READ_EXTERNAL_STORAGE
+            perms = [
+                Permission.READ_MEDIA_IMAGES,
+            ]
+        else:
+            perms = [
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+            ]
+        request_permissions(perms)
+    except Exception as e:
+        print(f'[Imgridroid] request_storage_permissions error: {e}')
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # Recepción de imágenes compartidas / "Abrir con" desde otras apps
 # ─────────────────────────────────────────────────────────────────────────
 def resolve_shared_uri_to_path(uri_str: str):
@@ -153,25 +186,40 @@ def resolve_shared_uri_to_path(uri_str: str):
         resolver = activity.getContentResolver()
         uri = Uri.parse(uri_str)
 
+        # Intentar detectar extensión desde el ContentResolver antes de
+        # asumir .png, para manejar JPEG y otros formatos correctamente.
+        ext = '.png'
+        try:
+            MimeTypeMap = autoclass('android.webkit.MimeTypeMap')
+            mime = resolver.getType(uri)
+            if mime:
+                detected = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+                if detected:
+                    ext = f'.{detected}'
+        except Exception:
+            pass
+
         input_stream = resolver.openInputStream(uri)
-        dest_path = join(get_cache_dir(), 'shared_input.png')
+        dest_path = join(get_cache_dir(), f'shared_input{ext}')
 
         File = autoclass('java.io.File')
         FileOutputStream = autoclass('java.io.FileOutputStream')
         out = FileOutputStream(File(dest_path))
 
-        JByteArray = autoclass('[B')
-        jbuf = JByteArray(8192)
+        # Usamos un bytearray de Python en lugar de JByteArray para evitar
+        # problemas de tipos con versiones recientes de pyjnius.
+        buf = bytearray(8192)
         while True:
-            n = input_stream.read(jbuf)
+            n = input_stream.read(buf, 0, len(buf))
             if n == -1:
                 break
-            out.write(jbuf, 0, n)
+            out.write(buf, 0, n)
         out.close()
         input_stream.close()
 
         return dest_path
-    except Exception:
+    except Exception as e:
+        print(f'[Imgridroid] resolve_shared_uri_to_path error: {e}')
         return None
 
 
@@ -180,7 +228,7 @@ def share_file(path: str) -> None:
     if platform != 'android':
         return
     try:
-        from jnius import autoclass, cast
+        from jnius import autoclass
 
         Intent = autoclass('android.content.Intent')
         File = autoclass('java.io.File')
@@ -194,7 +242,9 @@ def share_file(path: str) -> None:
 
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
-        intent.putExtra(Intent.EXTRA_STREAM, cast('android.os.Parcelable', uri))
+        # putExtra con Uri directo — sin cast a Parcelable, que falla en
+        # versiones recientes de pyjnius con AndroidX FileProvider.
+        intent.putExtra(Intent.EXTRA_STREAM, uri)
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 
         chooser = Intent.createChooser(intent, t('share'))
@@ -326,9 +376,14 @@ class ImgridroidApp(App):
         return Builder.load_string(KV)
 
     def on_start(self):
-        # Si la app fue abierta vía Intent (Compartir / Abrir con), Android
-        # entrega la URI acá.
-        self._handle_incoming_intent()
+        # Bug 2 fix: pedir permisos en runtime al arrancar la app.
+        request_storage_permissions()
+
+        # Bug 4 fix: diferir el parseo del Intent un frame para que la
+        # Activity de Android esté completamente inicializada. Sin este
+        # delay, getIntent() a veces devuelve None o un Intent vacío
+        # cuando la app se abre directamente desde "Compartir".
+        Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
 
     # ── Recepción de imágenes desde otras apps ────────────────────────
     def _handle_incoming_intent(self):
@@ -339,6 +394,8 @@ class ImgridroidApp(App):
             PythonActivity = autoclass('org.kivy.android.PythonActivity')
             activity = PythonActivity.mActivity
             intent = activity.getIntent()
+            if intent is None:
+                return
             action = intent.getAction()
             Intent = autoclass('android.content.Intent')
 
@@ -446,9 +503,15 @@ class ImgridroidApp(App):
     @mainthread
     def _on_preview_ready(self, ok: bool, out_path: str, _err):
         if ok:
-            # Forzar a Kivy a recargar la imagen (mismo nombre de archivo).
-            self.preview_source = ''
-            self.preview_source = out_path
+            # Bug 1 fix: Kivy cachea texturas por nombre de archivo y no
+            # detecta cambios en disco por sí solo. Limpiamos la entrada
+            # del cache explícitamente y añadimos un sufijo ?t=<timestamp>
+            # al source para que Kivy trate cada actualización como una
+            # URL nueva (truco estándar para evitar el stale-texture bug).
+            from kivy.cache import Cache
+            Cache.remove('kv.image', out_path)
+            Cache.remove('kv.texture', out_path)
+            self.preview_source = f'{out_path}?t={time.monotonic()}'
 
     # ── Generación final (resolución completa) ──────────────────────────
     def generate_full(self):

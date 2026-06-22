@@ -77,6 +77,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Convert SVG icon to PNG for buildozer
+        run: |
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 512 -h 512 imgrid.svg -o imgridroid/src/icon.png
+
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
         with:
