@@ -41,18 +41,9 @@ android.res_xml = src/android_extra/file_paths.xml
 # FileProvider: necesario para compartir el resultado generado con otras
 # apps (WhatsApp, Telegram, apps de impresoras, etc.) vía content:// URI
 # en lugar de file:// (Android 7+ lo exige).
-#
-# IMPORTANTE: se usa android.extra_manifest_xml (NO
-# extra_manifest_application_arguments). Esta última solo inserta texto
-# DENTRO de la etiqueta de apertura <application ...> (como si fueran
-# atributos), no permite agregar elementos hijos como <provider>. Pasarle
-# un <provider>...</provider> ahí generaba un AndroidManifest.xml inválido
-# y rompía el build en la tarea :processDebugMainManifest (manifest
-# merger). extra_manifest_xml en cambio inserta el contenido a nivel
-# <manifest>, y como el archivo trae su propio <application> envolviendo
-# al <provider>, el manifest merger de Android lo fusiona correctamente
-# con el <application> que genera python-for-android.
-android.extra_manifest_xml = src/android_extra/file_provider.xml
+# extra_manifest_application_arguments inserta el fragmento XML dentro
+# de <application> en el manifest — que es donde debe ir <provider>.
+android.extra_manifest_application_arguments = src/android_extra/file_provider.xml
 
 # Intent filters extra: hacen que Imgridroid aparezca como destino de
 # "Compartir" y "Abrir con" cuando el usuario interactúa con una imagen
