@@ -372,6 +372,7 @@ class ImgridroidApp(App):
     status_text = StringProperty('')
 
     _debounce_ev = ObjectProperty(None, allownone=True)
+    _preview_cancel = None  # threading.Event para cancelar hilo de preview en curso
 
     def tr(self, key: str) -> str:
         return t(key)
@@ -510,11 +511,37 @@ class ImgridroidApp(App):
         )
 
     def _run_preview_generation(self):
-        Thread(target=self._generate, args=(
+        import threading
+        # Cancelar hilo anterior si todavía está corriendo
+        if self._preview_cancel is not None:
+            self._preview_cancel.set()
+        cancel = threading.Event()
+        self._preview_cancel = cancel
+        Thread(target=self._generate_preview_safe, args=(
             self.preview_source_path,
             join(get_cache_dir(), 'preview_output.png'),
-            self._on_preview_ready,
+            cancel,
         ), daemon=True).start()
+
+    def _generate_preview_safe(self, src_path, dst_path, cancel):
+        """Genera el preview chequeando el evento de cancelación antes de
+        escribir. Si llegó una petición más nueva, descarta este resultado
+        sin tocar el widget."""
+        try:
+            create_image(
+                src_path, dst_path,
+                int(self.cols), int(self.rows),
+                int(self.gap), self.bg_hex,
+            )
+            if not cancel.is_set():
+                Clock.schedule_once(
+                    lambda dt: self._on_preview_ready(True, dst_path, None)
+                )
+        except Exception as e:
+            if not cancel.is_set():
+                Clock.schedule_once(
+                    lambda dt: self._on_preview_ready(False, dst_path, e)
+                )
 
     @mainthread
     def _on_preview_ready(self, ok: bool, out_path: str, err):

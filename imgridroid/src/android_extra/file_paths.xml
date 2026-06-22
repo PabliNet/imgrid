@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Cache interna de la app: ahí vive el resultado recién generado
-         antes de compartirlo (no es la carpeta donde el usuario guarda
-         explícitamente, ver external-path Pictures/Imgridroid abajo). -->
+    <!-- Cache interna nativa de Android (getCacheDir):
+         /data/data/org.imgrid.imgridroid/cache/ -->
     <cache-path name="imgridroid_cache" path="." />
+
+    <!-- Almacenamiento interno de la app (getFilesDir):
+         /data/data/org.imgrid.imgridroid/files/
+         Kivy usa user_data_dir que apunta aquí, por eso el resultado
+         generado (preview_output.png, etc.) vive en files/cache/ -->
+    <files-path name="imgridroid_files" path="." />
 
     <!-- Carpeta propia en almacenamiento externo donde se guardan los
          resultados cuando el usuario toca "Guardar" (Pictures/Imgridroid,
