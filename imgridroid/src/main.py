@@ -546,13 +546,17 @@ class ImgridroidApp(App):
     @mainthread
     def _on_preview_ready(self, ok: bool, out_path: str, err):
         if ok:
-            # Kivy no detecta cambios en disco con el mismo nombre de archivo.
-            # Solución: poner source='' y luego el path real en el mismo
-            # frame del hilo principal. Solo hacemos esto cuando sabemos que
-            # el archivo existe (ok=True), para nunca quedar con widget vacío.
+            # Actualizar la KVProperty que el widget Image tiene bindeada
+            # (source: app.preview_source). Manipular img.source directamente
+            # era incorrecto: Kivy podía revertirlo al re-evaluar el binding,
+            # por eso los sliders/color no actualizaban la preview.
+            #
+            # El truco source='' + source=path no alcanza cuando el archivo
+            # en disco cambia pero el path es el mismo (Kivy cachea por path).
+            # reload() fuerza descartar la textura cacheada.
+            self.preview_source = out_path
             img = self.root.ids.preview_image
-            img.source = ''
-            img.source = out_path
+            img.reload()
         else:
             # Si el preview falló, mantenemos lo que había (imagen original).
             print(f'[Imgridroid] preview generation failed: {err}')
@@ -596,7 +600,11 @@ class ImgridroidApp(App):
     def on_share(self):
         if not self.has_result:
             return
-        share_file(self.result_path)
+        try:
+            share_file(self.result_path)
+        except Exception as e:
+            self.status_text = t('save_error')
+            print(f'[Imgridroid] on_share error: {e}')
 
     def on_save(self):
         if not self.has_result:
