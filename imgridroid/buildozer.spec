@@ -26,15 +26,12 @@ android.accept_sdk_license = True
 # Permisos declarados también en el AndroidManifest.xml custom.
 android.permissions = READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
-# Manifest completo personalizado: incluye FileProvider, intent-filters
-# para "Compartir"/"Abrir con", y todos los permisos. Se usa en lugar de
-# android.extra_manifest_application_arguments y
-# android.manifest.intent_filters, que inyectan fragmentos XML via
-# --extra-manifest-application-arguments de p4a — ese mecanismo pasa el
-# contenido del archivo como string con \n literales en vez de saltos de
-# línea reales, lo que rompe el parser XML del manifest merger de Gradle
-# (ManifestMerger2$MergeFailureException).
-android.manifest = src/android_extra/AndroidManifest.xml
+# Hook de p4a: parchea el AndroidManifest.xml generado para agregar el
+# <provider> del FileProvider. Es más confiable que
+# extra_manifest_application_arguments (que pasa XML con \n literales
+# rompiendo el parser de Gradle) y que android.manifest (que buildozer
+# ignora silenciosamente — no existe como opción real de buildozer).
+p4a.hook = src/p4a_hook.py
 
 # file_paths.xml va a res/xml/ para que el FileProvider pueda
 # referenciarlo como @xml/file_paths.
