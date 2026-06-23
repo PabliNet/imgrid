@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.imgrid.imgridroid"
+    android:versionCode="1"
+    android:versionName="0.1.0">
+
+    <uses-sdk
+        android:minSdkVersion="24"
+        android:targetSdkVersion="34" />
+
+    <!-- Permisos de almacenamiento -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <application
+        android:label="Imgridroid"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.NoTitleBar">
+
+        <activity
+            android:name="org.kivy.android.PythonActivity"
+            android:label="Imgridroid"
+            android:screenOrientation="fullSensor"
+            android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="true">
+
+            <!-- Launcher intent -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Recibir imágenes compartidas desde otras apps -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!-- Abrir imágenes con esta app -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- FileProvider para compartir archivos generados vía content:// URI -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="org.imgrid.imgridroid.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

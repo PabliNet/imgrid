@@ -20,47 +20,34 @@ android.minapi = 24
 android.ndk_api = 24
 android.archs = arm64-v8a,armeabi-v7a
 
-# Acepta automáticamente las licencias del Android SDK. Necesario para que
-# el build corra sin intervención manual en GitHub Actions (sin esto,
-# buildozer pregunta "Accept? (y/N)" de forma interactiva y, en CI, eso
-# se interpreta como "no" — se saltea la instalación de build-tools y el
-# build falla más adelante por falta de aidl).
+# Acepta automáticamente las licencias del Android SDK en CI.
 android.accept_sdk_license = True
 
-# Permisos:
-#  - READ_MEDIA_IMAGES (Android 13+) / READ_EXTERNAL_STORAGE (Android <13):
-#    necesarios para que el usuario elija una imagen manualmente.
-#  - WRITE_EXTERNAL_STORAGE: solo relevante en Android <10, se mantiene
-#    por compatibilidad con dispositivos viejos.
+# Permisos declarados también en el AndroidManifest.xml custom.
 android.permissions = READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
-# Copia file_paths.xml a res/xml/ para que el FileProvider declarado en
-# file_provider.xml pueda referenciarlo como @xml/file_paths.
+# Manifest completo personalizado: incluye FileProvider, intent-filters
+# para "Compartir"/"Abrir con", y todos los permisos. Se usa en lugar de
+# android.extra_manifest_application_arguments y
+# android.manifest.intent_filters, que inyectan fragmentos XML via
+# --extra-manifest-application-arguments de p4a — ese mecanismo pasa el
+# contenido del archivo como string con \n literales en vez de saltos de
+# línea reales, lo que rompe el parser XML del manifest merger de Gradle
+# (ManifestMerger2$MergeFailureException).
+android.manifest = src/android_extra/AndroidManifest.xml
+
+# file_paths.xml va a res/xml/ para que el FileProvider pueda
+# referenciarlo como @xml/file_paths.
 android.res_xml = src/android_extra/file_paths.xml
-
-# FileProvider: necesario para compartir el resultado generado con otras
-# apps (WhatsApp, Telegram, apps de impresoras, etc.) vía content:// URI
-# en lugar de file:// (Android 7+ lo exige).
-# extra_manifest_application_arguments inserta el fragmento XML dentro
-# de <application> en el manifest — que es donde debe ir <provider>.
-android.extra_manifest_application_arguments = src/android_extra/file_provider.xml
-
-# Intent filters extra: hacen que Imgridroid aparezca como destino de
-# "Compartir" y "Abrir con" cuando el usuario interactúa con una imagen
-# desde la Galería u otra app. Esto inyecta <intent-filter> dentro de
-# <activity> en el AndroidManifest.xml generado.
-android.manifest.intent_filters = src/android_extra/intent_filters.xml
 
 # Habilita AndroidX, requerido por androidx.core.content.FileProvider.
 android.enable_androidx = True
 
-# androidx.core debe declararse explícitamente — enable_androidx solo
-# activa la migración de namespaces pero no descarga la librería.
+# androidx.core debe declararse explícitamente.
 android.gradle_dependencies = androidx.core:core:1.13.1
 
-# Ícono y splash (reemplazar por los assets reales del proyecto).
+# Ícono.
 icon.filename = %(source.dir)s/icon.png
-# presplash.filename = %(source.dir)s/presplash.png
 
 fullscreen = 0
 
