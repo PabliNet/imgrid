@@ -11,24 +11,15 @@ jobs:
   # ─── imgrid (CLI) ── solo Windows ─────────────────────────────────────────
   build-imgrid:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
-
       - name: Build imgrid
-        run: >
-          pyinstaller
-          --onefile
-          --name imgrid.exe
-          src/imgrid.py
-
+        run: pyinstaller --onefile --name imgrid.exe src/imgrid.py
       - uses: actions/upload-artifact@v4
         with:
           name: imgrid.exe
@@ -38,26 +29,17 @@ jobs:
   # ─── qtimgrid (PySide6) ── solo Windows ───────────────────────────────────
   build-qtimgrid:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install Python dependencies
         run: pip install -r requirements.txt pyinstaller PySide6
-
       - name: Build qtimgrid
         run: >
-          pyinstaller
-          --onefile
-          --windowed
-          --name qtimgrid.exe
-          --add-data "imgrid.svg;."
-          src/qtimgrid.py
-
+          pyinstaller --onefile --windowed --name qtimgrid.exe
+          --add-data "imgrid.svg;." src/qtimgrid.py
       - uses: actions/upload-artifact@v4
         with:
           name: qtimgrid.exe
@@ -65,15 +47,8 @@ jobs:
 
 
   # ─── imgridroid (Kivy) ── Android ─────────────────────────────────────────
-  # Se usa la imagen Docker oficial de kivy/buildozer directamente (en vez
-  # de la action ArtemSBulgakov/buildozer-action), porque el Dockerfile de
-  # esa action agrega el PPA openjdk-r para instalar Java, y ese PPA puede
-  # no tener paquetes publicados para la versión de Ubuntu de turno. La
-  # imagen oficial instala Java desde los repos de Ubuntu directamente, sin
-  # depender de ese PPA externo.
   build-imgridroid:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -105,14 +80,45 @@ jobs:
             --volume "${{ github.workspace }}/imgridroid":/home/user/hostcwd \
             kivy/buildozer:latest android debug
 
-      # El contenedor escribe como un usuario distinto al del runner; si
-      # algún paso posterior (subir artifacts, cachear) tropieza con
-      # permisos, esto deja todo legible/escribible de vuelta para el
-      # runner. El propio Dockerfile de kivy/buildozer documenta este
-      # mismo problema con /home/user/.buildozer/cache.
       - name: Fix permissions after container build
         if: always()
-        run: sudo chown -R "$(id -u):$(id -g)" "${{ github.workspace }}/imgridroid" "${{ github.workspace }}/.buildozer_global"
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" \
+            "${{ github.workspace }}/imgridroid" \
+            "${{ github.workspace }}/.buildozer_global"
+
+      - name: Install apktool
+        run: |
+          sudo apt-get install -y apktool
+
+      - name: Patch APK (add FileProvider + intent-filters)
+        run: |
+          APK=$(find imgridroid/bin -name '*.apk' | head -n 1)
+          echo "APK original: $APK"
+
+          # Desempaquetar
+          apktool d "$APK" -o /tmp/apk_unpacked -f
+
+          # Parchear el manifest
+          python3 imgridroid/src/patch_manifest.py /tmp/apk_unpacked/AndroidManifest.xml
+
+          # Reempaquetar
+          apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unsigned.apk
+
+          # Firmar con debug keystore (generado por buildozer, siempre en ~/.android)
+          KEYSTORE="$HOME/.android/debug.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkey -v -keystore "$KEYSTORE" \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass android -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          jarsigner -verbose \
+            -keystore "$KEYSTORE" \
+            -storepass android -keypass android \
+            -signedjar "$APK" \
+            /tmp/imgridroid_patched_unsigned.apk androiddebugkey
+          echo "APK parcheado y firmado: $APK"
 
       - name: Locate built APK
         id: locate_apk
@@ -127,20 +133,17 @@ jobs:
           path: ${{ steps.locate_apk.outputs.apk_path }}
 
 
-  # ─── Release: adjunta todos los binarios ──────────────────────────────────
+  # ─── Release ──────────────────────────────────────────────────────────────
   release:
     needs: [build-imgrid, build-qtimgrid, build-imgridroid]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
-
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*

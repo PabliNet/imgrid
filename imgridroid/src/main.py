@@ -401,7 +401,11 @@ class ImgridroidApp(App):
         self.status_text = t('generating')
         self.has_result = False
         name, _ = splitext(basename(self.source_path))
-        out = join(get_cache_dir(), f'{name}_{self.cols}x{self.rows}.png')
+        bg = self.bg_hex.lstrip('#')
+        # El nombre incluye todos los parámetros para que Kivy no reutilice
+        # una textura cacheada cuando solo cambia gap o color de fondo.
+        out = join(get_cache_dir(),
+                   f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}.png')
         Thread(
             target=self._run_generate,
             args=(self.source_path, out),
