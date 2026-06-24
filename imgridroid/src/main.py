@@ -201,7 +201,17 @@ def share_file(path, on_error=None):
         Parcelable = autoclass('android.os.Parcelable')
         intent.putExtra(Intent.EXTRA_STREAM, cast(Parcelable, uri))
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        # Forzamos el casteo del String de Python a String de Java
+        JavaString = autoclass('java.lang.String')
+        share_title = cast(JavaString, t('share'))
+
+        # Creamos el chooser
+        chooser = Intent.createChooser(intent, share_title)
+        # Nos aseguramos de que el chooser también herede el permiso de lectura
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
         activity.startActivity(Intent.createChooser(intent, t('share')))
+
     except Exception as e:
         msg = f'{type(e).__name__}: {e}'
         print(f'[Imgridroid] share_file: {msg}')
