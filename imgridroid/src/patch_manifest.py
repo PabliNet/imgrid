@@ -33,7 +33,7 @@ intent_filters = '''
 file_provider = '''
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities="org.imgrid.imgridroid.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
