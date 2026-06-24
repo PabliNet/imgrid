@@ -178,7 +178,7 @@ def resolve_shared_uri_to_path(uri_str):
 # ─────────────────────────────────────────────────────────────────────────
 # Compartir
 # ─────────────────────────────────────────────────────────────────────────
-def share_file(path):
+def share_file(path, on_error=None):
     if platform != 'android':
         return
     try:
@@ -199,7 +199,10 @@ def share_file(path):
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         activity.startActivity(Intent.createChooser(intent, t('share')))
     except Exception as e:
-        print(f'[Imgridroid] share_file: {e}')
+        msg = f'{type(e).__name__}: {e}'
+        print(f'[Imgridroid] share_file: {msg}')
+        if on_error:
+            on_error(msg)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -426,17 +429,36 @@ class ImgridroidApp(App):
             self.result_path = path
             self.has_result = True
             self.status_text = t('generated_ok')
-            # Forzar recarga del widget aunque el nombre de archivo sea igual
+            # Generar copia reducida para el widget (evita límite de textura
+            # de OpenGL ES en Android con imágenes grandes).
+            thumb = self._make_thumb(path)
             self.result_image = ''
-            self.result_image = path
+            self.result_image = thumb
         else:
             self.status_text = t('generate_error')
             print(f'[Imgridroid] generate error: {err}')
 
+    def _make_thumb(self, path, max_side=1024):
+        """Devuelve un path a una copia reducida de la imagen para preview."""
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(path) as im:
+                if max(im.size) <= max_side:
+                    return path  # ya es chica, usar directamente
+                im.thumbnail((max_side, max_side))
+                thumb_path = path.replace('.png', '_thumb.png')
+                im.save(thumb_path)
+                return thumb_path
+        except Exception as e:
+            print(f'[Imgridroid] _make_thumb error: {e}')
+            return path
+
     # ── Compartir / Guardar ───────────────────────────────────────────
     def on_share(self):
         if self.has_result:
-            share_file(self.result_path)
+            self.status_text = f'Compartiendo: {self.result_path}'
+            share_file(self.result_path,
+                       on_error=lambda msg: setattr(self, 'status_text', msg))
 
     def on_save(self):
         if not self.has_result:
