@@ -87,9 +87,9 @@ jobs:
             "${{ github.workspace }}/imgridroid" \
             "${{ github.workspace }}/.buildozer_global"
 
-      - name: Install apktool
+      - name: Install apktool, zipalign and apksigner
         run: |
-          sudo apt-get install -y apktool
+          sudo apt-get install -y apktool zipalign apksigner
 
       - name: Patch APK (add FileProvider + intent-filters)
         run: |
@@ -103,9 +103,9 @@ jobs:
           python3 imgridroid/src/patch_manifest.py /tmp/apk_unpacked/AndroidManifest.xml
 
           # Reempaquetar
-          apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unsigned.apk
+          apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unaligned.apk
 
-          # Firmar con debug keystore
+          # Generar debug keystore si no existe
           KEYSTORE="$HOME/.android/debug.keystore"
           mkdir -p "$HOME/.android"
           if [ ! -f "$KEYSTORE" ]; then
@@ -114,11 +114,20 @@ jobs:
               -validity 10000 -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          jarsigner -verbose \
-            -keystore "$KEYSTORE" \
-            -storepass android -keypass android \
-            -signedjar "$APK" \
-            /tmp/imgridroid_patched_unsigned.apk androiddebugkey
+
+          # zipalign es requerido por apksigner antes de firmar
+          zipalign -f -v 4 /tmp/imgridroid_patched_unaligned.apk /tmp/imgridroid_patched_aligned.apk
+
+          # apksigner genera firma v1+v2+v3, compatible con Android 7-15.
+          # jarsigner solo generaba v1 (JAR Signature), que Android 11+
+          # rechaza al instalar con "App not installed".
+          apksigner sign \
+            --ks "$KEYSTORE" \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --ks-alias androiddebugkey \
+            --out "$APK" \
+            /tmp/imgridroid_patched_aligned.apk
           echo "APK parcheado y firmado: $APK"
 
       - name: Locate built APK
