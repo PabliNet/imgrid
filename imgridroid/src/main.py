@@ -182,7 +182,7 @@ def share_file(path, on_error=None):
     if platform != 'android':
         return
     try:
-        from jnius import autoclass
+        from jnius import autoclass, cast
         Intent = autoclass('android.content.Intent')
         File = autoclass('java.io.File')
         FileProvider = autoclass('androidx.core.content.FileProvider')
@@ -195,7 +195,11 @@ def share_file(path, on_error=None):
 
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
-        intent.putExtra(Intent.EXTRA_STREAM, uri)
+        # putExtra(String, Parcelable) — pyjnius necesita el cast explícito
+        # porque Uri implementa Parcelable y sin el cast no resuelve el
+        # método sobrecargado correcto.
+        Parcelable = autoclass('android.os.Parcelable')
+        intent.putExtra(Intent.EXTRA_STREAM, cast(Parcelable, uri))
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         activity.startActivity(Intent.createChooser(intent, t('share')))
     except Exception as e:
