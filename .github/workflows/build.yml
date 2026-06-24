@@ -87,9 +87,9 @@ jobs:
             "${{ github.workspace }}/imgridroid" \
             "${{ github.workspace }}/.buildozer_global"
 
-      - name: Install apktool, zipalign and apksigner
+      - name: Install apktool
         run: |
-          sudo apt-get install -y apktool zipalign apksigner
+          sudo apt-get install -y apktool
 
       - name: Patch APK (add FileProvider + intent-filters)
         run: |
@@ -103,9 +103,10 @@ jobs:
           python3 imgridroid/src/patch_manifest.py /tmp/apk_unpacked/AndroidManifest.xml
 
           # Reempaquetar
-          apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unaligned.apk
+          apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unsigned.apk
 
-          # Generar debug keystore si no existe
+          # Firmar con apksigner (genera v1+v2, necesario para Android 11+)
+          # jarsigner solo genera v1, que Android 11+ rechaza en algunos casos.
           KEYSTORE="$HOME/.android/debug.keystore"
           mkdir -p "$HOME/.android"
           if [ ! -f "$KEYSTORE" ]; then
@@ -114,20 +115,16 @@ jobs:
               -validity 10000 -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-
-          # zipalign es requerido por apksigner antes de firmar
-          zipalign -f -v 4 /tmp/imgridroid_patched_unaligned.apk /tmp/imgridroid_patched_aligned.apk
-
-          # apksigner genera firma v1+v2+v3, compatible con Android 7-15.
-          # jarsigner solo generaba v1 (JAR Signature), que Android 11+
-          # rechaza al instalar con "App not installed".
-          apksigner sign \
+          # apksigner está en el Android SDK del runner
+          APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name "apksigner" | sort -V | tail -1)
+          echo "Usando apksigner: $APKSIGNER"
+          "$APKSIGNER" sign \
             --ks "$KEYSTORE" \
+            --ks-key-alias androiddebugkey \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --ks-alias androiddebugkey \
             --out "$APK" \
-            /tmp/imgridroid_patched_aligned.apk
+            /tmp/imgridroid_patched_unsigned.apk
           echo "APK parcheado y firmado: $APK"
 
       - name: Locate built APK
