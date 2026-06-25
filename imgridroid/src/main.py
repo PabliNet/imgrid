@@ -194,11 +194,9 @@ def share_file(path, on_error=None):
         uri = FileProvider.getUriForFile(activity, authority, File(path))
         uri_str = uri.toString()
 
-        # Construir el intent vía setData+setType para evitar putExtra con Uri.
-        # setData acepta un Uri reconstruido desde string, que pyjnius
-        # maneja correctamente sin ambigüedad de sobrecargas.
         intent = Intent(Intent.ACTION_SEND)
-        intent.setDataAndType(Uri.parse(uri_str), 'image/png')
+        intent.setType('image/png')
+        intent.putExtra(Intent.EXTRA_STREAM, uri)
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(Intent.createChooser(intent, t('share')))
