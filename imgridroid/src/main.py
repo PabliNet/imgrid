@@ -193,15 +193,17 @@ def share_file(path, on_error=None):
         authority = activity.getPackageName() + '.fileprovider'
         uri = FileProvider.getUriForFile(activity, authority, file_obj)
 
+        # Compartir vía ClipData — evita el problema de pyjnius con
+        # putExtra(String, Parcelable) y Uri. Android 10+ lo prefiere.
+        ClipData = autoclass('android.content.ClipData')
+        clip = ClipData.newUri(
+            activity.getContentResolver(), 'image', uri
+        )
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
-        # Usar Bundle.putParcelable para evitar ambigüedad de sobrecargas
-        # en pyjnius al llamar intent.putExtra con un Uri.
-        Bundle = autoclass('android.os.Bundle')
-        bundle = Bundle()
-        bundle.putParcelable(Intent.EXTRA_STREAM, uri)
-        intent.putExtras(bundle)
+        intent.setClipData(clip)
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(Intent.createChooser(intent, t('share')))
     except Exception as e:
         msg = f'{type(e).__name__}: {e}'
