@@ -183,16 +183,17 @@ def share_file(path, on_error=None):
         return
     try:
         from jnius import autoclass
+        import traceback
+
         Intent = autoclass('android.content.Intent')
-        Uri = autoclass('android.net.Uri')
         FileProvider = autoclass('androidx.core.content.FileProvider')
         File = autoclass('java.io.File')
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         activity = PythonActivity.mActivity
 
         authority = activity.getPackageName() + '.fileprovider'
-        uri = FileProvider.getUriForFile(activity, authority, File(path))
-        uri_str = uri.toString()
+        file_obj = File(str(path))
+        uri = FileProvider.getUriForFile(activity, authority, file_obj)
 
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
@@ -201,9 +202,11 @@ def share_file(path, on_error=None):
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(Intent.createChooser(intent, t('share')))
 
-    except Exception as e:
-        msg = f'{type(e).__name__}: {e}'
-        print(f'[Imgridroid] share_file: {msg}')
+    except Exception:
+        import traceback
+        msg = traceback.format_exc()
+        print('[Imgridroid] share_file traceback:')
+        print(msg)
         if on_error:
             on_error(msg)
 
@@ -298,7 +301,10 @@ BoxLayout:
         id: status_label
         text: app.status_text
         size_hint_y: None
-        height: dp(30)
+        text_size: self.width, None
+        halign: 'left'
+        valign: 'middle'
+        height: max(dp(30), self.texture_size[1])
 '''
 
 
@@ -461,7 +467,30 @@ class ImgridroidApp(App):
         if self.has_result:
             self.status_text = f'Compartiendo: {self.result_path}'
             share_file(self.result_path,
-                       on_error=lambda msg: setattr(self, 'status_text', msg))
+                       on_error=self._show_share_error)
+
+    def _show_share_error(self, msg):
+        self.status_text = msg
+        try:
+            from kivy.uix.popup import Popup
+            from kivy.uix.label import Label
+
+            label = Label(
+                text=msg,
+                text_size=(self.root.width * 0.9, None),
+                size_hint=(1, None),
+                halign='left',
+                valign='top',
+            )
+            label.bind(texture_size=lambda inst, sz: setattr(inst, 'height', sz[1]))
+            popup = Popup(
+                title='Error al compartir',
+                content=label,
+                size_hint=(0.9, 0.7),
+            )
+            popup.open()
+        except Exception:
+            pass
 
     def on_save(self):
         if not self.has_result:
