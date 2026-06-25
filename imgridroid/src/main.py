@@ -182,7 +182,7 @@ def share_file(path, on_error=None):
     if platform != 'android':
         return
     try:
-        from jnius import autoclass, cast
+        from jnius import autoclass
         Intent = autoclass('android.content.Intent')
         File = autoclass('java.io.File')
         FileProvider = autoclass('androidx.core.content.FileProvider')
@@ -195,23 +195,14 @@ def share_file(path, on_error=None):
 
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
-        # putExtra(String, Parcelable) — pyjnius necesita el cast explícito
-        # porque Uri implementa Parcelable y sin el cast no resuelve el
-        # método sobrecargado correcto.
-        Parcelable = autoclass('android.os.Parcelable')
-        intent.putExtra(Intent.EXTRA_STREAM, cast(Parcelable, uri))
+        # Usar Bundle.putParcelable para evitar ambigüedad de sobrecargas
+        # en pyjnius al llamar intent.putExtra con un Uri.
+        Bundle = autoclass('android.os.Bundle')
+        bundle = Bundle()
+        bundle.putParcelable(Intent.EXTRA_STREAM, uri)
+        intent.putExtras(bundle)
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        # Forzamos el casteo del String de Python a String de Java
-        JavaString = autoclass('java.lang.String')
-        share_title = cast(JavaString, t('share'))
-
-        # Creamos el chooser
-        chooser = Intent.createChooser(intent, share_title)
-        # Nos aseguramos de que el chooser también herede el permiso de lectura
-        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-
         activity.startActivity(Intent.createChooser(intent, t('share')))
-
     except Exception as e:
         msg = f'{type(e).__name__}: {e}'
         print(f'[Imgridroid] share_file: {msg}')
