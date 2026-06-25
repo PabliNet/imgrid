@@ -182,7 +182,7 @@ def share_file(path, on_error=None):
     if platform != 'android':
         return
     try:
-        from jnius import autoclass
+        from jnius import autoclass, cast
         import traceback
 
         Intent = autoclass('android.content.Intent')
@@ -194,10 +194,11 @@ def share_file(path, on_error=None):
         authority = activity.getPackageName() + '.fileprovider'
         file_obj = File(str(path))
         uri = FileProvider.getUriForFile(activity, authority, file_obj)
+        parcelable_uri = cast('android.os.Parcelable', uri)
 
         intent = Intent(Intent.ACTION_SEND)
         intent.setType('image/png')
-        intent.putExtra(Intent.EXTRA_STREAM, uri)
+        intent.putExtra(Intent.EXTRA_STREAM, parcelable_uri)
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(Intent.createChooser(intent, t('share')))
