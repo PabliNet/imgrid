@@ -184,27 +184,25 @@ def share_file(path, on_error=None):
     try:
         from jnius import autoclass
         Intent = autoclass('android.content.Intent')
-        File = autoclass('java.io.File')
+        Uri = autoclass('android.net.Uri')
         FileProvider = autoclass('androidx.core.content.FileProvider')
+        File = autoclass('java.io.File')
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         activity = PythonActivity.mActivity
 
-        file_obj = File(path)
         authority = activity.getPackageName() + '.fileprovider'
-        uri = FileProvider.getUriForFile(activity, authority, file_obj)
+        uri = FileProvider.getUriForFile(activity, authority, File(path))
+        uri_str = uri.toString()
 
-        # Compartir vía ClipData — evita el problema de pyjnius con
-        # putExtra(String, Parcelable) y Uri. Android 10+ lo prefiere.
-        ClipData = autoclass('android.content.ClipData')
-        clip = ClipData.newUri(
-            activity.getContentResolver(), 'image', uri
-        )
+        # Construir el intent vía setData+setType para evitar putExtra con Uri.
+        # setData acepta un Uri reconstruido desde string, que pyjnius
+        # maneja correctamente sin ambigüedad de sobrecargas.
         intent = Intent(Intent.ACTION_SEND)
-        intent.setType('image/png')
-        intent.setClipData(clip)
+        intent.setDataAndType(Uri.parse(uri_str), 'image/png')
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         activity.startActivity(Intent.createChooser(intent, t('share')))
+
     except Exception as e:
         msg = f'{type(e).__name__}: {e}'
         print(f'[Imgridroid] share_file: {msg}')
