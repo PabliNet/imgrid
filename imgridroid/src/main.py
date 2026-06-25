@@ -202,6 +202,17 @@ def share_file(path, on_error=None):
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+        # Android 10+ lee el Uri desde ClipData cuando EXTRA_STREAM
+        # no es reconocido como Uri por el sistema.
+        ClipData = autoclass('android.content.ClipData')
+        ClipDescription = autoclass('android.content.ClipDescription')
+        ClipDataItem = autoclass('android.content.ClipData$Item')
+        clip = ClipData(
+            ClipDescription('image', ['image/png']),
+            ClipDataItem(uri)
+        )
+        intent.setClipData(clip)
+
         String = autoclass('java.lang.String')
         chooser = Intent.createChooser(intent, String(t('share')))
         activity.startActivity(chooser)
