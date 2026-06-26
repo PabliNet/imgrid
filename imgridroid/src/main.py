@@ -207,8 +207,11 @@ def share_file(path, on_error=None):
         ClipData = autoclass('android.content.ClipData')
         ClipDescription = autoclass('android.content.ClipDescription')
         ClipDataItem = autoclass('android.content.ClipData$Item')
+        # ClipDescription requiere String[] de Java, no lista de Python
+        String = autoclass('java.lang.String')
+        mime_array = [String('image/png')]
         clip = ClipData(
-            ClipDescription('image', ['image/png']),
+            ClipDescription(String('image'), mime_array),
             ClipDataItem(uri)
         )
         intent.setClipData(clip)
