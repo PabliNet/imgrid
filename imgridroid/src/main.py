@@ -60,7 +60,7 @@ MESSAGES = {
         'generate': 'Generar',
         'share': 'Compartir',
         'save': 'Guardar',
-        'saved_ok': 'Guardado en {path}',
+        'saved_ok': 'Imagen guardada.',
         'save_error': 'No se pudo guardar.',
         'no_image': 'Primero elegí una imagen.',
         'generating': 'Generando…',
@@ -78,7 +78,7 @@ MESSAGES = {
         'generate': 'Generate',
         'share': 'Share',
         'save': 'Save',
-        'saved_ok': 'Saved to {path}',
+        'saved_ok': 'Image saved.',
         'save_error': 'Could not save.',
         'no_image': 'Choose an image first.',
         'generating': 'Generating…',
@@ -227,23 +227,39 @@ def share_file(path, on_error=None):
 # ─────────────────────────────────────────────────────────────────────────
 # Reducir imagen al tamaño del widget de preview
 # ─────────────────────────────────────────────────────────────────────────
-def make_preview_copy(src_path, widget_w, widget_h):
-    """Reduce la imagen original al tamaño del widget de preview.
-
-    Retorna el path de la copia reducida, o src_path si ya es suficientemente
-    chica o si PIL falla.
+def make_preview_copy(src_path, widget_w, widget_h, cols, rows, gap):
+    """Genera una copia de la imagen del tamaño mínimo necesario para la
+    preview, calculado según la orientación de la imagen y los parámetros
+    del grid. Cada celda tendrá exactamente los píxeles que ocupa en el
+    widget — ni más.
     """
     try:
         from PIL import Image as PILImage
         with PILImage.open(src_path) as im:
-            # Si la imagen ya cabe en el widget, no hace falta reducirla
-            if im.width <= widget_w and im.height <= widget_h:
+            img_w, img_h = im.size
+            aspect = img_w / img_h
+
+            if img_h >= img_w:
+                # Retrato: la altura limita, dividida en filas
+                alto_celda = (widget_h - (rows + 1) * gap) / rows
+                ancho_celda = alto_celda * aspect
+            else:
+                # Paisaje: el ancho limita, dividido en columnas
+                ancho_celda = (widget_w - (cols + 1) * gap) / cols
+                alto_celda = ancho_celda / aspect
+
+            work_w = int(ancho_celda * cols + (cols + 1) * gap)
+            work_h = int(alto_celda * rows + (rows + 1) * gap)
+
+            # Si la imagen original ya es más chica, usarla directamente
+            if img_w <= work_w and img_h <= work_h:
                 return src_path
-            im.thumbnail((int(widget_w), int(widget_h)))
+
+            im_copy = im.resize((work_w, work_h), PILImage.LANCZOS)
             import hashlib
             tag = hashlib.md5(src_path.encode()).hexdigest()[:8]
             dest = join(get_cache_dir(), f'preview_copy_{tag}.png')
-            im.save(dest)
+            im_copy.save(dest)
             return dest
     except Exception as e:
         print(f'[Imgridroid] make_preview_copy: {e}')
@@ -418,25 +434,29 @@ class ImgridroidApp(App):
 
     def _set_source(self, path):
         self.source_path = path
-        self.result_image = path   # mostrar original mientras se reduce
+        self.result_image = path
         self._invalidate_result()
         self.status_text = t('preparing')
-        # Reducir al tamaño del widget en hilo secundario
+        self._start_preview_copy()
+
+    def _start_preview_copy(self):
+        """Lanza la generación de la copia de trabajo en hilo secundario."""
+        if not self.source_path:
+            return
         widget = self.root.ids.preview_image
         w, h = widget.width, widget.height
-        # Si el widget aún no tiene tamaño (primer frame), usar pantalla
         if w < 10 or h < 10:
             from kivy.core.window import Window
             w, h = Window.width, Window.height * 0.5
         Thread(
             target=self._prepare_preview_copy,
-            args=(path, w, h),
+            args=(self.source_path, w, h,
+                  int(self.cols), int(self.rows), int(self.gap)),
             daemon=True,
         ).start()
 
-    def _prepare_preview_copy(self, path, w, h):
-        """Genera la copia reducida en hilo secundario."""
-        preview = make_preview_copy(path, w, h)
+    def _prepare_preview_copy(self, path, w, h, cols, rows, gap):
+        preview = make_preview_copy(path, w, h, cols, rows, gap)
         Clock.schedule_once(lambda dt: self._on_preview_copy_ready(preview))
 
     @mainthread
@@ -448,6 +468,11 @@ class ImgridroidApp(App):
     def on_param_change(self, name, value):
         setattr(self, name, int(value))
         self._invalidate_result()
+        # El tamaño mínimo de trabajo depende de cols/rows/gap,
+        # así que hay que regenerar la copia cuando cambian.
+        if self.source_path:
+            self.status_text = t('preparing')
+            self._start_preview_copy()
 
     def _invalidate_result(self):
         self.has_result = False
@@ -545,7 +570,7 @@ class ImgridroidApp(App):
             try:
                 dest = join(get_app_storage_dir(), basename(path))
                 copyfile(path, dest)
-                self.status_text = t('saved_ok').format(path=dest)
+                self.status_text = t('saved_ok')
             except Exception as e:
                 self.status_text = t('save_error')
                 print(f'[Imgridroid] on_save: {e}')
