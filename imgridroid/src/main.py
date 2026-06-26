@@ -2,12 +2,12 @@
 """
 Imgridroid — versión Android de imgrid/qtimgrid, basada en el motor pyimgrid.
 
-Flujo simplificado:
-  - El usuario elige una imagen (o la recibe vía "Compartir"/"Abrir con").
-  - Ajusta columnas, filas, separación y color de fondo con los sliders.
-  - Toca "Generar" → pyimgrid procesa la imagen y actualiza la preview.
-  - Compartir / Guardar se habilitan tras generar.
-  - Cualquier cambio de parámetro o imagen vuelve a deshabilitar esos botones.
+Flujo:
+  - Al elegir imagen → se reduce una sola vez al tamaño del widget de
+    preview y se guarda como copia de trabajo.
+  - Generar → create_image trabaja sobre la copia reducida → preview rápida.
+  - Guardar / Compartir → create_image sobre la original a resolución
+    completa → solo cuando el usuario lo pide explícitamente.
 """
 from os import makedirs
 from os.path import join, basename, splitext
@@ -18,7 +18,7 @@ from kivy.app import App
 from kivy.clock import Clock, mainthread
 from kivy.lang import Builder
 from kivy.properties import (
-    BooleanProperty, ListProperty, NumericProperty, ObjectProperty,
+    BooleanProperty, ListProperty, NumericProperty,
     StringProperty,
 )
 from kivy.utils import platform
@@ -66,6 +66,8 @@ MESSAGES = {
         'generating': 'Generando…',
         'generated_ok': '¡Listo!',
         'generate_error': 'Error al generar.',
+        'preparing': 'Preparando imagen…',
+        'saving_full': 'Generando en alta resolución…',
     },
     'en': {
         'choose_image': 'Choose image',
@@ -82,6 +84,8 @@ MESSAGES = {
         'generating': 'Generating…',
         'generated_ok': 'Done!',
         'generate_error': 'Failed to generate.',
+        'preparing': 'Preparing image…',
+        'saving_full': 'Generating full resolution…',
     },
 }
 
@@ -183,7 +187,6 @@ def share_file(path, on_error=None):
         return
     try:
         from jnius import autoclass, cast
-        import traceback
 
         Intent = autoclass('android.content.Intent')
         FileProvider = autoclass('androidx.core.content.FileProvider')
@@ -192,8 +195,7 @@ def share_file(path, on_error=None):
         activity = PythonActivity.mActivity
 
         authority = activity.getPackageName() + '.fileprovider'
-        file_obj = File(str(path))
-        uri = FileProvider.getUriForFile(activity, authority, file_obj)
+        uri = FileProvider.getUriForFile(activity, authority, File(str(path)))
         parcelable_uri = cast('android.os.Parcelable', uri)
 
         intent = Intent(Intent.ACTION_SEND)
@@ -202,31 +204,50 @@ def share_file(path, on_error=None):
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-        # Android 10+ lee el Uri desde ClipData cuando EXTRA_STREAM
-        # no es reconocido como Uri por el sistema.
         ClipData = autoclass('android.content.ClipData')
         ClipDescription = autoclass('android.content.ClipDescription')
         ClipDataItem = autoclass('android.content.ClipData$Item')
-        # ClipDescription requiere String[] de Java, no lista de Python
         String = autoclass('java.lang.String')
-        mime_array = [String('image/png')]
         clip = ClipData(
-            ClipDescription(String('image'), mime_array),
+            ClipDescription(String('image'), [String('image/png')]),
             ClipDataItem(uri)
         )
         intent.setClipData(clip)
 
-        String = autoclass('java.lang.String')
-        chooser = Intent.createChooser(intent, String(t('share')))
-        activity.startActivity(chooser)
+        activity.startActivity(Intent.createChooser(intent, String(t('share'))))
 
     except Exception:
         import traceback
         msg = traceback.format_exc()
-        print('[Imgridroid] share_file traceback:')
-        print(msg)
+        print(f'[Imgridroid] share_file: {msg}')
         if on_error:
             on_error(msg)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Reducir imagen al tamaño del widget de preview
+# ─────────────────────────────────────────────────────────────────────────
+def make_preview_copy(src_path, widget_w, widget_h):
+    """Reduce la imagen original al tamaño del widget de preview.
+
+    Retorna el path de la copia reducida, o src_path si ya es suficientemente
+    chica o si PIL falla.
+    """
+    try:
+        from PIL import Image as PILImage
+        with PILImage.open(src_path) as im:
+            # Si la imagen ya cabe en el widget, no hace falta reducirla
+            if im.width <= widget_w and im.height <= widget_h:
+                return src_path
+            im.thumbnail((int(widget_w), int(widget_h)))
+            import hashlib
+            tag = hashlib.md5(src_path.encode()).hexdigest()[:8]
+            dest = join(get_cache_dir(), f'preview_copy_{tag}.png')
+            im.save(dest)
+            return dest
+    except Exception as e:
+        print(f'[Imgridroid] make_preview_copy: {e}')
+        return src_path
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -329,8 +350,9 @@ BoxLayout:
 class ImgridroidApp(App):
     title = 'Imgridroid'
 
-    source_path  = StringProperty('')
-    result_image = StringProperty('')   # lo que muestra el widget Image
+    source_path      = StringProperty('')   # original a resolución completa
+    preview_src_path = StringProperty('')   # copia reducida al tamaño del widget
+    result_image     = StringProperty('')   # lo que muestra el widget Image
 
     cols    = NumericProperty(3)
     rows    = NumericProperty(3)
@@ -339,7 +361,7 @@ class ImgridroidApp(App):
     bg_rgba = ListProperty([1, 1, 1, 1])
 
     has_result  = BooleanProperty(False)
-    result_path = StringProperty('')
+    result_path = StringProperty('')   # resultado a resolución completa
     status_text = StringProperty('')
 
     def tr(self, key):
@@ -396,9 +418,31 @@ class ImgridroidApp(App):
 
     def _set_source(self, path):
         self.source_path = path
-        # Mostrar la imagen original como preview hasta que el usuario genere
-        self.result_image = path
+        self.result_image = path   # mostrar original mientras se reduce
         self._invalidate_result()
+        self.status_text = t('preparing')
+        # Reducir al tamaño del widget en hilo secundario
+        widget = self.root.ids.preview_image
+        w, h = widget.width, widget.height
+        # Si el widget aún no tiene tamaño (primer frame), usar pantalla
+        if w < 10 or h < 10:
+            from kivy.core.window import Window
+            w, h = Window.width, Window.height * 0.5
+        Thread(
+            target=self._prepare_preview_copy,
+            args=(path, w, h),
+            daemon=True,
+        ).start()
+
+    def _prepare_preview_copy(self, path, w, h):
+        """Genera la copia reducida en hilo secundario."""
+        preview = make_preview_copy(path, w, h)
+        Clock.schedule_once(lambda dt: self._on_preview_copy_ready(preview))
+
+    @mainthread
+    def _on_preview_copy_ready(self, preview_path):
+        self.preview_src_path = preview_path
+        self.status_text = ''
 
     # ── Parámetros ────────────────────────────────────────────────────
     def on_param_change(self, name, value):
@@ -406,7 +450,6 @@ class ImgridroidApp(App):
         self._invalidate_result()
 
     def _invalidate_result(self):
-        """Deshabilita Compartir/Guardar cuando cambia algo."""
         self.has_result = False
 
     # ── Color de fondo ────────────────────────────────────────────────
@@ -423,22 +466,22 @@ class ImgridroidApp(App):
         picker.bind(color=_on_color)
         popup.open()
 
-    # ── Generar ───────────────────────────────────────────────────────
+    # ── Generar (preview rápida sobre copia reducida) ──────────────────
     def generate(self):
         if not self.source_path:
             self.status_text = t('no_image')
             return
+        # Usar copia reducida si está lista, si no usar original
+        src = self.preview_src_path or self.source_path
         self.status_text = t('generating')
         self.has_result = False
         name, _ = splitext(basename(self.source_path))
         bg = self.bg_hex.lstrip('#')
-        # El nombre incluye todos los parámetros para que Kivy no reutilice
-        # una textura cacheada cuando solo cambia gap o color de fondo.
         out = join(get_cache_dir(),
                    f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}.png')
         Thread(
             target=self._run_generate,
-            args=(self.source_path, out),
+            args=(src, out),
             daemon=True,
         ).start()
 
@@ -453,45 +496,65 @@ class ImgridroidApp(App):
     @mainthread
     def _on_done(self, ok, path, err):
         if ok:
-            self.result_path = path
+            self.result_path = path   # preview — se usa para compartir/guardar
             self.has_result = True
             self.status_text = t('generated_ok')
-            # Generar copia reducida para el widget (evita límite de textura
-            # de OpenGL ES en Android con imágenes grandes).
-            thumb = self._make_thumb(path)
             self.result_image = ''
-            self.result_image = thumb
+            self.result_image = path
         else:
             self.status_text = t('generate_error')
             print(f'[Imgridroid] generate error: {err}')
 
-    def _make_thumb(self, path, max_side=1024):
-        """Devuelve un path a una copia reducida de la imagen para preview."""
-        try:
-            from PIL import Image as PILImage
-            with PILImage.open(path) as im:
-                if max(im.size) <= max_side:
-                    return path  # ya es chica, usar directamente
-                im.thumbnail((max_side, max_side))
-                thumb_path = path.replace('.png', '_thumb.png')
-                im.save(thumb_path)
-                return thumb_path
-        except Exception as e:
-            print(f'[Imgridroid] _make_thumb error: {e}')
-            return path
-
-    # ── Compartir / Guardar ───────────────────────────────────────────
+    # ── Compartir / Guardar (resolución completa) ──────────────────────
     def on_share(self):
-        if self.has_result:
-            share_file(self.result_path,
-                       on_error=self._show_share_error)
+        if not self.has_result:
+            return
+        self.status_text = t('saving_full')
+        Thread(target=self._generate_full_then,
+               args=('share',), daemon=True).start()
+
+    def on_save(self):
+        if not self.has_result:
+            return
+        self.status_text = t('saving_full')
+        Thread(target=self._generate_full_then,
+               args=('save',), daemon=True).start()
+
+    def _generate_full_then(self, action):
+        """Genera el resultado a resolución completa y luego comparte o guarda."""
+        try:
+            name, _ = splitext(basename(self.source_path))
+            bg = self.bg_hex.lstrip('#')
+            out = join(get_cache_dir(),
+                       f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}_full.png')
+            create_image(self.source_path, out,
+                         int(self.cols), int(self.rows),
+                         int(self.gap), self.bg_hex)
+            Clock.schedule_once(lambda dt: self._on_full_ready(action, out))
+        except Exception as e:
+            Clock.schedule_once(
+                lambda dt: setattr(self, 'status_text', t('generate_error')))
+            print(f'[Imgridroid] _generate_full_then: {e}')
+
+    @mainthread
+    def _on_full_ready(self, action, path):
+        self.status_text = ''
+        if action == 'share':
+            share_file(path, on_error=self._show_share_error)
+        elif action == 'save':
+            try:
+                dest = join(get_app_storage_dir(), basename(path))
+                copyfile(path, dest)
+                self.status_text = t('saved_ok').format(path=dest)
+            except Exception as e:
+                self.status_text = t('save_error')
+                print(f'[Imgridroid] on_save: {e}')
 
     def _show_share_error(self, msg):
         self.status_text = msg
         try:
             from kivy.uix.popup import Popup
             from kivy.uix.label import Label
-
             label = Label(
                 text=msg,
                 text_size=(self.root.width * 0.9, None),
@@ -500,25 +563,10 @@ class ImgridroidApp(App):
                 valign='top',
             )
             label.bind(texture_size=lambda inst, sz: setattr(inst, 'height', sz[1]))
-            popup = Popup(
-                title='Error al compartir',
-                content=label,
-                size_hint=(0.9, 0.7),
-            )
-            popup.open()
+            Popup(title='Error al compartir', content=label,
+                  size_hint=(0.9, 0.7)).open()
         except Exception:
             pass
-
-    def on_save(self):
-        if not self.has_result:
-            return
-        try:
-            dest = join(get_app_storage_dir(), basename(self.result_path))
-            copyfile(self.result_path, dest)
-            self.status_text = t('saved_ok').format(path=dest)
-        except Exception as e:
-            self.status_text = t('save_error')
-            print(f'[Imgridroid] on_save: {e}')
 
 
 if __name__ == '__main__':
