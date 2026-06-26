@@ -483,7 +483,6 @@ class ImgridroidApp(App):
     # ── Compartir / Guardar ───────────────────────────────────────────
     def on_share(self):
         if self.has_result:
-            self.status_text = f'Compartiendo: {self.result_path}'
             share_file(self.result_path,
                        on_error=self._show_share_error)
 

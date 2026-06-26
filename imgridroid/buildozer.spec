@@ -33,6 +33,7 @@ android.enable_androidx = True
 android.gradle_dependencies = androidx.core:core:1.13.1
 
 icon.filename = %(source.dir)s/icon.png
+presplash.filename = %(source.dir)s/icon.png
 
 fullscreen = 0
 
