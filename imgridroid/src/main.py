@@ -227,39 +227,21 @@ def share_file(path, on_error=None):
 # ─────────────────────────────────────────────────────────────────────────
 # Reducir imagen al tamaño del widget de preview
 # ─────────────────────────────────────────────────────────────────────────
-def make_preview_copy(src_path, widget_w, widget_h, cols, rows, gap):
-    """Genera una copia de la imagen del tamaño mínimo necesario para la
-    preview, calculado según la orientación de la imagen y los parámetros
-    del grid. Cada celda tendrá exactamente los píxeles que ocupa en el
-    widget — ni más.
+def make_preview_copy(src_path, widget_w, widget_h):
+    """Genera una sola vez una copia de la imagen reducida al tamaño del
+    widget de preview. Esta copia se usa para todas las previews sucesivas
+    — nunca se regenera desde la original al cambiar parámetros del grid.
     """
     try:
         from PIL import Image as PILImage
         with PILImage.open(src_path) as im:
-            img_w, img_h = im.size
-            aspect = img_w / img_h
-
-            if img_h >= img_w:
-                # Retrato: la altura limita, dividida en filas
-                alto_celda = (widget_h - (rows + 1) * gap) / rows
-                ancho_celda = alto_celda * aspect
-            else:
-                # Paisaje: el ancho limita, dividido en columnas
-                ancho_celda = (widget_w - (cols + 1) * gap) / cols
-                alto_celda = ancho_celda / aspect
-
-            work_w = int(ancho_celda * cols + (cols + 1) * gap)
-            work_h = int(alto_celda * rows + (rows + 1) * gap)
-
-            # Si la imagen original ya es más chica, usarla directamente
-            if img_w <= work_w and img_h <= work_h:
+            if im.width <= widget_w and im.height <= widget_h:
                 return src_path
-
-            im_copy = im.resize((work_w, work_h), PILImage.LANCZOS)
+            im.thumbnail((int(widget_w), int(widget_h)), PILImage.LANCZOS)
             import hashlib
             tag = hashlib.md5(src_path.encode()).hexdigest()[:8]
             dest = join(get_cache_dir(), f'preview_copy_{tag}.png')
-            im_copy.save(dest)
+            im.save(dest)
             return dest
     except Exception as e:
         print(f'[Imgridroid] make_preview_copy: {e}')
@@ -280,6 +262,12 @@ BoxLayout:
         size_hint_y: 0.5
         fit_mode: 'contain'
         source: app.result_image
+        canvas.before:
+            Color:
+                rgba: 0, 0, 0, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
 
     Button:
         text: app.tr('choose_image')
@@ -450,13 +438,12 @@ class ImgridroidApp(App):
             w, h = Window.width, Window.height * 0.5
         Thread(
             target=self._prepare_preview_copy,
-            args=(self.source_path, w, h,
-                  int(self.cols), int(self.rows), int(self.gap)),
+            args=(self.source_path, w, h),
             daemon=True,
         ).start()
 
-    def _prepare_preview_copy(self, path, w, h, cols, rows, gap):
-        preview = make_preview_copy(path, w, h, cols, rows, gap)
+    def _prepare_preview_copy(self, path, w, h):
+        preview = make_preview_copy(path, w, h)
         Clock.schedule_once(lambda dt: self._on_preview_copy_ready(preview))
 
     @mainthread
@@ -468,11 +455,6 @@ class ImgridroidApp(App):
     def on_param_change(self, name, value):
         setattr(self, name, int(value))
         self._invalidate_result()
-        # El tamaño mínimo de trabajo depende de cols/rows/gap,
-        # así que hay que regenerar la copia cuando cambian.
-        if self.source_path:
-            self.status_text = t('preparing')
-            self._start_preview_copy()
 
     def _invalidate_result(self):
         self.has_result = False
