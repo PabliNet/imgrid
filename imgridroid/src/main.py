@@ -355,7 +355,7 @@ BoxLayout:
             width: dp(40)
             halign: 'right'
             valign: 'middle'
-            text_size: self.size
+            text_size: None, self.height
 
     # ── Fondo ─────────────────────────────────────────────────────────
     BoxLayout:
