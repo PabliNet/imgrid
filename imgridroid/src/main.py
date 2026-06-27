@@ -276,44 +276,99 @@ BoxLayout:
         height: dp(48)
         on_release: app.open_file_chooser()
 
-    GridLayout:
-        cols: 2
+    # ── Columnas ──────────────────────────────────────────────────────
+    BoxLayout:
         size_hint_y: None
-        height: dp(140)
+        height: dp(36)
         spacing: dp(8)
-
         Label:
-            text: f"{app.tr('columns')}: {int(cols_slider.value)}"
+            text: app.tr('columns')
+            size_hint_x: None
+            width: dp(110)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
         Slider:
             id: cols_slider
             min: 1
-            max: 20
+            max: 10
             value: app.cols
             step: 1
             on_value: app.on_param_change('cols', self.value)
-
         Label:
-            text: f"{app.tr('rows')}: {int(rows_slider.value)}"
+            text: str(int(cols_slider.value))
+            size_hint_x: None
+            width: dp(30)
+            halign: 'right'
+            valign: 'middle'
+            text_size: self.size
+
+    # ── Filas ─────────────────────────────────────────────────────────
+    BoxLayout:
+        size_hint_y: None
+        height: dp(36)
+        spacing: dp(8)
+        Label:
+            text: app.tr('rows')
+            size_hint_x: None
+            width: dp(110)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
         Slider:
             id: rows_slider
             min: 1
-            max: 20
+            max: 10
             value: app.rows
             step: 1
             on_value: app.on_param_change('rows', self.value)
-
         Label:
-            text: f"{app.tr('gap')}: {int(gap_slider.value)}px"
+            text: str(int(rows_slider.value))
+            size_hint_x: None
+            width: dp(30)
+            halign: 'right'
+            valign: 'middle'
+            text_size: self.size
+
+    # ── Separación ────────────────────────────────────────────────────
+    BoxLayout:
+        size_hint_y: None
+        height: dp(36)
+        spacing: dp(8)
+        Label:
+            text: app.tr('gap')
+            size_hint_x: None
+            width: dp(110)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
         Slider:
             id: gap_slider
             min: 0
-            max: 100
+            max: 35
             value: app.gap
             step: 1
             on_value: app.on_param_change('gap', self.value)
+        Label:
+            text: f"{int(gap_slider.value)}px"
+            size_hint_x: None
+            width: dp(40)
+            halign: 'right'
+            valign: 'middle'
+            text_size: self.size
 
+    # ── Fondo ─────────────────────────────────────────────────────────
+    BoxLayout:
+        size_hint_y: None
+        height: dp(36)
+        spacing: dp(8)
         Label:
             text: app.tr('bg_color')
+            size_hint_x: None
+            width: dp(110)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
         Button:
             text: app.bg_hex
             background_color: app.bg_rgba
@@ -346,7 +401,7 @@ BoxLayout:
         text: app.status_text
         size_hint_y: None
         text_size: self.width, None
-        halign: 'left'
+        halign: 'center'
         valign: 'middle'
         height: max(dp(30), self.texture_size[1])
 '''
@@ -434,6 +489,21 @@ class ImgridroidApp(App):
             self.status_text = str(e)
 
     def _set_source(self, path):
+        # Verificar tamaño máximo antes de aceptar la imagen
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(path) as im:
+                w, h = im.size
+                if w > 4896 or h > 6528:
+                    self.status_text = (
+                        f'Imagen demasiado grande ({w}×{h}px). '
+                        f'Máximo 4896×6528px.'
+                    )
+                    return
+        except Exception as e:
+            self.status_text = f'Error al leer imagen: {e}'
+            return
+
         self.source_path = path
         self.result_image = path
         self._invalidate_result()

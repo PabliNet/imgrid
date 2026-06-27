@@ -11,7 +11,7 @@ version = 0.1.0
 
 requirements = python3,kivy==2.3.1,pillow,pyimgrid,plyer,pyjnius
 
-orientation = portrait,landscape
+orientation = portrait
 
 # ── Android ────────────────────────────────────────────────────────────
 android.api = 34
