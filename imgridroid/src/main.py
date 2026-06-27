@@ -262,6 +262,7 @@ BoxLayout:
         size_hint_y: 0.5
         fit_mode: 'contain'
         source: app.result_image
+        on_size: app.on_preview_widget_size(*self.size)
         canvas.before:
             Color:
                 rgba: 0, 0, 0, 1
@@ -368,6 +369,18 @@ class ImgridroidApp(App):
     result_path = StringProperty('')   # resultado a resolución completa
     status_text = StringProperty('')
 
+    _preview_widget_w = 0
+    _preview_widget_h = 0
+
+    def on_preview_widget_size(self, w, h):
+        """Se llama cuando el widget de preview tiene sus dimensiones reales."""
+        if w > 10 and h > 10:
+            self._preview_widget_w = w
+            self._preview_widget_h = h
+            # Si hay imagen cargada y aún no hay copia de trabajo, generarla
+            if self.source_path and not self.preview_src_path:
+                self._start_preview_copy()
+
     def tr(self, key):
         return t(key)
 
@@ -431,11 +444,12 @@ class ImgridroidApp(App):
         """Lanza la generación de la copia de trabajo en hilo secundario."""
         if not self.source_path:
             return
-        widget = self.root.ids.preview_image
-        w, h = widget.width, widget.height
+        w = self._preview_widget_w
+        h = self._preview_widget_h
+        # Si el widget aún no tiene dimensiones reales, esperar al on_size
         if w < 10 or h < 10:
-            from kivy.core.window import Window
-            w, h = Window.width, Window.height * 0.5
+            return
+        self.preview_src_path = ''
         Thread(
             target=self._prepare_preview_copy,
             args=(self.source_path, w, h),
