@@ -444,6 +444,8 @@ class ImgridroidApp(App):
         return Builder.load_string(KV)
 
     def on_start(self):
+        from kivy.core.window import Window
+        Window.clearcolor = (0, 0, 0, 1)
         request_storage_permissions()
         Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
 
