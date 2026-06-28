@@ -259,6 +259,7 @@ BoxLayout:
 
     BoxLayout:
         size_hint_y: 0.5
+        opacity: 1 if app.result_image else 0
         canvas.before:
             Color:
                 rgba: 0, 0, 0, 1
@@ -448,9 +449,13 @@ class ImgridroidApp(App):
         Window.clearcolor = (0, 0, 0, 1)
         request_storage_permissions()
         Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
+        # Polling cada segundo para detectar nuevos intents cuando la app
+        # ya está abierta (onNewIntent no tiene binding directo en Kivy).
+        Clock.schedule_interval(self._check_new_intent, 1.0)
+        self._last_intent_id = None
 
-    # ── Intent entrante ────────────────────────────────────────────────
-    def _handle_incoming_intent(self):
+    def _check_new_intent(self, dt):
+        """Detecta si Android entregó un nuevo intent a la Activity activa."""
         if platform != 'android':
             return
         try:
@@ -459,6 +464,11 @@ class ImgridroidApp(App):
             intent = PythonActivity.mActivity.getIntent()
             if intent is None:
                 return
+            # Usar el hashCode del intent como identificador único
+            intent_id = intent.hashCode()
+            if intent_id == self._last_intent_id:
+                return
+            self._last_intent_id = intent_id
             Intent = autoclass('android.content.Intent')
             action = intent.getAction()
             uri = None
@@ -475,7 +485,12 @@ class ImgridroidApp(App):
                 if local:
                     self._set_source(local)
         except Exception as e:
-            print(f'[Imgridroid] _handle_incoming_intent: {e}')
+            print(f'[Imgridroid] _check_new_intent: {e}')
+
+    # ── Intent entrante ────────────────────────────────────────────────
+    def _handle_incoming_intent(self):
+        # Delega en _check_new_intent que ya maneja toda la lógica
+        self._check_new_intent(0)
 
     # ── Selección de imagen ────────────────────────────────────────────
     def open_file_chooser(self):
