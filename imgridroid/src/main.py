@@ -542,6 +542,7 @@ class ImgridroidApp(App):
             return
 
         self.source_path = path
+        self.result_image = ''   # fuerza el refresco aunque el path sea el mismo
         self.result_image = path
         self._invalidate_result()
         self.status_text = t('preparing')
