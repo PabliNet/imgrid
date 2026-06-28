@@ -257,18 +257,19 @@ BoxLayout:
     padding: dp(12)
     spacing: dp(8)
 
-    Image:
-        id: preview_image
+    BoxLayout:
         size_hint_y: 0.5
-        fit_mode: 'contain'
-        source: app.result_image
-        on_size: app.on_preview_widget_size(*self.size)
         canvas.before:
             Color:
                 rgba: 0, 0, 0, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
+        Image:
+            id: preview_image
+            fit_mode: 'contain'
+            source: app.result_image
+            on_size: app.on_preview_widget_size(*self.size)
 
     Button:
         text: app.tr('choose_image')
@@ -301,7 +302,7 @@ BoxLayout:
             width: dp(30)
             halign: 'right'
             valign: 'middle'
-            text_size: self.size
+            text_size: None, self.height
 
     # ── Filas ─────────────────────────────────────────────────────────
     BoxLayout:
@@ -328,7 +329,7 @@ BoxLayout:
             width: dp(30)
             halign: 'right'
             valign: 'middle'
-            text_size: self.size
+            text_size: None, self.height
 
     # ── Separación ────────────────────────────────────────────────────
     BoxLayout:
