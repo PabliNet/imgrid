@@ -448,27 +448,22 @@ class ImgridroidApp(App):
         from kivy.core.window import Window
         Window.clearcolor = (0, 0, 0, 1)
         request_storage_permissions()
-        Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
-        # Polling cada segundo para detectar nuevos intents cuando la app
-        # ya está abierta (onNewIntent no tiene binding directo en Kivy).
-        Clock.schedule_interval(self._check_new_intent, 1.0)
-        self._last_intent_id = None
 
-    def _check_new_intent(self, dt):
-        """Detecta si Android entregó un nuevo intent a la Activity activa."""
-        if platform != 'android':
+        # ─── ESCUCHAMOS EL EVENTO NATIVO ─────────────────────────────────
+        if platform == 'android':
+            from android import activity
+            # Vinculamos el evento on_new_intent a nuestra función
+            activity.bind(on_new_intent=self._on_new_intent)
+
+        # Procesamos el intent inicial (por si la app se abrió desde cero compartiendo)
+        Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
+
+    def _process_intent(self, intent):
+        """Lógica unificada para extraer la URI de cualquier Intent."""
+        if intent is None:
             return
         try:
             from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            intent = PythonActivity.mActivity.getIntent()
-            if intent is None:
-                return
-            # Usar el hashCode del intent como identificador único
-            intent_id = intent.hashCode()
-            if intent_id == self._last_intent_id:
-                return
-            self._last_intent_id = intent_id
             Intent = autoclass('android.content.Intent')
             action = intent.getAction()
             uri = None
@@ -483,14 +478,38 @@ class ImgridroidApp(App):
             if uri:
                 local = resolve_shared_uri_to_path(uri)
                 if local:
-                    self._set_source(local)
+                    # Forzamos de forma segura que la interfaz de Kivy cargue la imagen
+                    Clock.schedule_once(lambda dt: self._set_source(local))
         except Exception as e:
-            print(f'[Imgridroid] _check_new_intent: {e}')
+            print(f'[Imgridroid] _process_intent error: {e}')
 
-    # ── Intent entrante ────────────────────────────────────────────────
+    # ── Intent entrante cuando la app se abre desde CERO ───────────────
     def _handle_incoming_intent(self):
-        # Delega en _check_new_intent que ya maneja toda la lógica
-        self._check_new_intent(0)
+        if platform != 'android':
+            return
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            intent = PythonActivity.mActivity.getIntent()
+            self._process_intent(intent)
+        except Exception as e:
+            print(f'[Imgridroid] _handle_incoming_intent: {e}')
+
+    # ── Intent entrante cuando la app YA ESTÁ ABIERTA ──────────────────
+    def _on_new_intent(self, intent):
+        """Este método se gatilla solito gracias a Android cuando mandás algo
+        con la app minimizada o abierta en segundo plano.
+        """
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            # Buenas prácticas en Android: actualizamos el intent de la activity principal
+            PythonActivity.mActivity.setIntent(intent)
+
+            # Procesamos el nuevo archivo entrante
+            self._process_intent(intent)
+        except Exception as e:
+            print(f'[Imgridroid] _on_new_intent error: {e}')
 
     # ── Selección de imagen ────────────────────────────────────────────
     def open_file_chooser(self):
