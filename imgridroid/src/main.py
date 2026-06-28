@@ -548,7 +548,8 @@ class ImgridroidApp(App):
             return
 
         self.source_path = path
-        self.result_image = ''   # fuerza el refresco aunque el path sea el mismo
+        self.preview_src_path = ''   # resetear para evitar usar copia vieja
+        self.result_image = ''
         self.result_image = path
         self._invalidate_result()
         self.status_text = t('preparing')
@@ -605,6 +606,11 @@ class ImgridroidApp(App):
     def generate(self):
         if not self.source_path:
             self.status_text = t('no_image')
+            return
+        if not self.preview_src_path:
+            # La copia de trabajo todavía no está lista — esperar
+            self.status_text = t('preparing')
+            Clock.schedule_once(lambda dt: self.generate(), 0.3)
             return
         # Usar copia reducida si está lista, si no usar original
         src = self.preview_src_path or self.source_path
