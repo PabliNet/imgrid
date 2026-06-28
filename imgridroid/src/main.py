@@ -9,6 +9,7 @@ Flujo:
   - Guardar / Compartir → create_image sobre la original a resolución
     completa → solo cuando el usuario lo pide explícitamente.
 """
+from time import time
 from os import makedirs
 from os.path import join, basename, splitext
 from shutil import copyfile
@@ -160,7 +161,12 @@ def resolve_shared_uri_to_path(uri_str):
             pass
 
         input_stream = resolver.openInputStream(uri)
-        dest_path = join(get_cache_dir(), f'shared_input{ext}')
+
+        # ─── Nombre único por timestamp ───────────────────────────────────
+        # Esto obliga a Kivy a ignorar su caché de texturas y recargar la UI.
+        timestamp = int(time() * 1000)
+        dest_path = join(get_cache_dir(), f'shared_input_{timestamp}{ext}')
+        # ─────────────────────────────────────────────────────────────────
 
         File = autoclass('java.io.File')
         FileOutputStream = autoclass('java.io.FileOutputStream')
