@@ -32,19 +32,24 @@ A tool for generating print-ready image grids. It distributes an image across mu
 
 4. Install:
 
-   GUI version (GTK4):
+   GUI version (GTK+3):
    ```bash
-   sudo apt install gtkimgrid
+   sudo apt install gtk3imgrid
    ```
 
-   GUI version (Tkinter):
+   GUI version (GTK+4):
    ```bash
-   sudo apt install tkimgrid
+   sudo apt install gtkimgrid
    ```
 
    GUI version (Qt6):
    ```bash
    sudo apt install qtimgrid
+   ```
+
+   GUI version (Tkinter):
+   ```bash
+   sudo apt install tkimgrid
    ```
 
    CLI version:
@@ -54,7 +59,24 @@ A tool for generating print-ready image grids. It distributes an image across mu
 
 ## Download
 
-Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
+Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas), including the Android version (Imgridroid).
+
+## Project structure
+
+```
+├── imgridroid/
+│   ├── src/
+│   │   └── main.py          # Imgridroid source code (Android)
+│   ├── buildozer.spec       # Buildozer configuration file for compiling Imgridroid
+│   └── requirements.txt     # Android-specific dependencies
+└── src/
+│   ├── gtk3imgrid.py        # GTK+3 GUI source code
+│   ├── gtkimgrid.py         # GTK+4 GUI source code
+│   ├── imgrid.py            # CLI source code
+│   ├── qtimgrid.py          # Qt6 GUI source code
+│   └── tkimgrid.py          # Tkinter GUI source code
+└── requirements.txt         # Desktop dependencies (GTK+3, GTK+4, CLI, Qt6 and Tkinter)
+```
 
 ## Requirements
 
@@ -66,7 +88,14 @@ Available at [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 pip install pyimgrid pillow
 ```
 
-**GTK4** (`gtkimgrid`)
+**GTK+3** (`gtk3imgrid`)
+- [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
+- [gir1.2-gtk-3.0](https://gtk.org/)
+- [python3](https://www.python.org/)
+- [python3-gi](https://pygobject.gnome.org/) (PyGObject)
+- [python3-gi-cairo](https://pygobject.gnome.org/)
+
+**GTK+4** (`gtkimgrid`)
 - [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
 - [gir1.2-gtk-4.0](https://gtk.org/)
 - [python3](https://www.python.org/)
@@ -135,11 +164,7 @@ imgrid input.jpg 3×3,5,`#000000 output.jpg
 
 ## GUI
 
-A graphical interface is available via Tkinter. Run it with:
-
-```bash
-./tkimgrid
-```
+A graphical interface is available in three versions: GTK+3 (`gtk3imgrid`), GTK+4 (`gtkimgrid`), Qt6 (`qtimgrid`) and Tkinter (`tkimgrid`).
 
 > **Debian users:** Tkinter is not bundled with Python and must be installed separately:
 > ```bash
@@ -184,19 +209,24 @@ Es una herramienta para generar cuadrículas de imágenes listas para imprimir. 
 
 4. Instalar:
 
-   Versión GUI (GTK4):
+   Versión GUI (GTK+3):
    ```bash
-   sudo apt install gtkimgrid
+   sudo apt install gtk3imgrid
    ```
 
-   Versión GUI (Tkinter):
+   Versión GUI (GTK+4):
    ```bash
-   sudo apt install tkimgrid
+   sudo apt install gtkimgrid
    ```
 
    Versión GUI (Qt6):
    ```bash
    sudo apt install qtimgrid
+   ```
+
+   Versión GUI (Tkinter):
+   ```bash
+   sudo apt install tkimgrid
    ```
 
    Versión CLI:
@@ -206,7 +236,24 @@ Es una herramienta para generar cuadrículas de imágenes listas para imprimir. 
 
 ## Descarga
 
-Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
+Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas), incluyendo la versión para Android (Imgridroid).
+
+## Estructura del proyecto
+
+```
+├── imgridroid/
+│   ├── src/
+│   │   └── main.py          # Código fuente de Imgridroid (Android)
+│   ├── buildozer.spec       # Archivo de configuración de Buildozer para compilar Imgridroid
+│   └── requirements.txt     # Dependencias específicas de la versión Android
+└── src/
+│   ├── gtk3imgrid.py        # Código fuente de la interfaz GTK+3
+│   ├── gtkimgrid.py         # Código fuente de la interfaz GTK+4
+│   ├── imgrid.py            # Código fuente de la versión CLI
+│   ├── qtimgrid.py          # Código fuente de la interfaz Qt6
+│   └── tkimgrid.py          # Código fuente de la interfaz Tkinter
+└── requirements.txt         # Dependencias de escritorio (GTK+3, GTK+4, CLI, Qt6 y Tkinter)
+```
 
 ## Requisitos
 
@@ -218,7 +265,14 @@ Disponible en [www.pabli.net.ar/descargas](https://www.pabli.net.ar/descargas).
 pip install pyimgrid pillow
 ```
 
-**GTK4** (`gtkimgrid`)
+**GTK+3** (`gtk3imgrid`)
+- [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
+- [gir1.2-gtk-3.0](https://gtk.org/)
+- [python3](https://www.python.org/)
+- [python3-gi](https://pygobject.gnome.org/) (PyGObject)
+- [python3-gi-cairo](https://pygobject.gnome.org/)
+
+**GTK+4** (`gtkimgrid`)
 - [gir1.2-gdkpixbuf-2.0](https://packages.debian.org/search?keywords=gir1.2-gdkpixbuf-2.0)
 - [gir1.2-gtk-4.0](https://gtk.org/)
 - [python3](https://www.python.org/)
@@ -287,11 +341,7 @@ imgrid input.jpg 3×3,5,`#000000 output.jpg
 
 ## Interfaz gráfica
 
-Está disponible una interfaz gráfica mediante Tkinter. Para ejecutarla:
-
-```bash
-./tkimgrid
-```
+Está disponible en tres versiones: GTK+3 (`gtk3imgrid`), GTK+4 (`gtkimgrid`), Qt6 (`qtimgrid`) y Tkinter (`tkimgrid`).
 
 > **Usuarios de Debian:** Tkinter no viene incluido con Python y debe instalarse por separado:
 > ```bash
