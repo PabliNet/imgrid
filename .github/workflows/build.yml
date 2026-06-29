@@ -54,7 +54,7 @@ jobs:
 
       - name: Convert SVG icon to PNG for buildozer
         run: |
-          sudo apt-get install -y librsvg2-bin
+          sudo apt-get install -y librsvg2-bin apktool
           rsvg-convert -w 512 -h 512 imgrid.svg -o imgridroid/src/icon.png
 
       - name: Cache Buildozer global directory
@@ -87,26 +87,17 @@ jobs:
             "${{ github.workspace }}/imgridroid" \
             "${{ github.workspace }}/.buildozer_global"
 
-      - name: Install apktool
-        run: |
-          sudo apt-get install -y apktool
-
-      - name: Patch APK (add FileProvider + intent-filters)
+      - name: Patch APK (FileProvider + intent-filters)
         run: |
           APK=$(find imgridroid/bin -name '*.apk' | head -n 1)
           echo "APK original: $APK"
-
-          # Desempaquetar
           apktool d "$APK" -o /tmp/apk_unpacked -f
-
-          # Parchear el manifest
           python3 imgridroid/src/patch_manifest.py /tmp/apk_unpacked/AndroidManifest.xml
-
-          # Reempaquetar
           apktool b /tmp/apk_unpacked -o /tmp/imgridroid_patched_unsigned.apk
+          echo "APK desempaquetado y parcheado"
 
-          # Firmar con apksigner (genera v1+v2, necesario para Android 11+)
-          # jarsigner solo genera v1, que Android 11+ rechaza en algunos casos.
+      - name: Sign debug APK
+        run: |
           KEYSTORE="$HOME/.android/debug.keystore"
           mkdir -p "$HOME/.android"
           if [ ! -f "$KEYSTORE" ]; then
@@ -115,29 +106,44 @@ jobs:
               -validity 10000 -storepass android -keypass android \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-          # apksigner está en el Android SDK del runner
           APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name "apksigner" | sort -V | tail -1)
-          echo "Usando apksigner: $APKSIGNER"
           "$APKSIGNER" sign \
             --ks "$KEYSTORE" \
             --ks-key-alias androiddebugkey \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --out "$APK" \
+            --out imgridroid/bin/imgridroid-debug.apk \
             /tmp/imgridroid_patched_unsigned.apk
-          echo "APK parcheado y firmado: $APK"
+          echo "APK debug firmado: imgridroid/bin/imgridroid-debug.apk"
 
-      - name: Locate built APK
-        id: locate_apk
+      - name: Sign release APK
+        # Solo si el secret KEYSTORE_BASE64 está disponible
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         run: |
-          APK_PATH=$(find imgridroid/bin -name '*.apk' | head -n 1)
-          echo "Found: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+          APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name "apksigner" | sort -V | tail -1)
+          "$APKSIGNER" sign \
+            --ks /tmp/release.jks \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            --out imgridroid/bin/imgridroid-release.apk \
+            /tmp/imgridroid_patched_unsigned.apk
+          rm /tmp/release.jks
+          echo "APK release firmado: imgridroid/bin/imgridroid-release.apk"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
         with:
-          name: imgridroid.apk
-          path: ${{ steps.locate_apk.outputs.apk_path }}
+          name: imgridroid-debug.apk
+          path: imgridroid/bin/imgridroid-debug.apk
+
+      - name: Upload release APK
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: imgridroid-release.apk
+          path: imgridroid/bin/imgridroid-release.apk
 
 
   # ─── Release ──────────────────────────────────────────────────────────────
