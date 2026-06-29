@@ -117,16 +117,23 @@ jobs:
           echo "APK debug firmado: imgridroid/bin/imgridroid-debug.apk"
 
       - name: Sign release APK
-        # Solo si el secret KEYSTORE_BASE64 está disponible
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Secret KEYSTORE_BASE64 no configurado, saltando."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
           APKSIGNER=$(find /usr/local/lib/android/sdk/build-tools -name "apksigner" | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks /tmp/release.jks \
-            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
-            --ks-pass pass:"${{ secrets.KEYSTORE_PASSWORD }}" \
-            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASSWORD" \
+            --key-pass pass:"$KEY_PASSWORD" \
             --out imgridroid/bin/imgridroid-release.apk \
             /tmp/imgridroid_patched_unsigned.apk
           rm /tmp/release.jks
@@ -139,11 +146,11 @@ jobs:
           path: imgridroid/bin/imgridroid-debug.apk
 
       - name: Upload release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: imgridroid-release.apk
           path: imgridroid/bin/imgridroid-release.apk
+          if-no-files-found: ignore
 
 
   # ─── Release ──────────────────────────────────────────────────────────────
