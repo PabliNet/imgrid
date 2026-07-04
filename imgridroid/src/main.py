@@ -26,7 +26,7 @@ from kivy.utils import platform
 
 from pyimgrid import create_image
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 DEFAULT_BG_HEX = '#FFFFFF'
 
 
@@ -53,7 +53,12 @@ LANG = _detect_lang()
 
 MESSAGES = {
     'es': {
-        'choose_image': 'Elegir imagen',
+        'choose_image': 'Cargar imagen',
+        'clipboard': 'Portapapeles',
+        'clipboard_preview': '¿Importar esta imagen?',
+        'import': 'Importar',
+        'discard': 'Descartar',
+        'clipboard_empty': 'No hay imagen en el portapapeles.',
         'columns': 'Columnas',
         'rows': 'Filas',
         'gap': 'Separación',
@@ -71,7 +76,12 @@ MESSAGES = {
         'saving_full': 'Generando en alta resolución…',
     },
     'en': {
-        'choose_image': 'Choose image',
+        'choose_image': 'Load image',
+        'clipboard': 'Clipboard',
+        'clipboard_preview': 'Import this image?',
+        'import': 'Import',
+        'discard': 'Discard',
+        'clipboard_empty': 'No image in clipboard.',
         'columns': 'Columns',
         'rows': 'Rows',
         'gap': 'Gap',
@@ -278,11 +288,16 @@ BoxLayout:
             source: app.result_image
             on_size: app.on_preview_widget_size(*self.size)
 
-    Button:
-        text: app.tr('choose_image')
+    BoxLayout:
         size_hint_y: None
         height: dp(48)
-        on_release: app.open_file_chooser()
+        spacing: dp(8)
+        Button:
+            text: app.tr('choose_image')
+            on_release: app.open_file_chooser()
+        Button:
+            text: app.tr('clipboard')
+            on_release: app.open_clipboard()
 
     # ── Columnas ──────────────────────────────────────────────────────
     BoxLayout:
@@ -460,6 +475,7 @@ class ImgridroidApp(App):
             from android import activity
             # Vinculamos el evento on_new_intent a nuestra función
             activity.bind(on_new_intent=self._on_new_intent)
+            activity.bind(on_activity_result=self.on_activity_result)
 
         # Procesamos el intent inicial (por si la app se abrió desde cero compartiendo)
         Clock.schedule_once(lambda dt: self._handle_incoming_intent(), 0.5)
@@ -519,17 +535,124 @@ class ImgridroidApp(App):
 
     # ── Selección de imagen ────────────────────────────────────────────
     def open_file_chooser(self):
+        """Abre la galería nativa de Android vía ACTION_PICK."""
+        if platform == 'android':
+            try:
+                from jnius import autoclass
+                Intent = autoclass('android.content.Intent')
+                MediaStore = autoclass('android.provider.MediaStore')
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                intent = Intent(Intent.ACTION_PICK)
+                intent.setType('image/*')
+                PythonActivity.mActivity.startActivityForResult(intent, 1001)
+                # El resultado llega via on_activity_result
+            except Exception as e:
+                self.status_text = str(e)
+        else:
+            try:
+                from plyer import filechooser
+                def _cb(sel):
+                    if sel:
+                        Clock.schedule_once(lambda dt: self._set_source(sel[0]))
+                filechooser.open_file(
+                    on_selection=_cb,
+                    filters=[('Images', '*.png', '*.jpg', '*.jpeg', '*.webp', '*.bmp')],
+                )
+            except Exception as e:
+                self.status_text = str(e)
+
+    def on_activity_result(self, request_code, result_code, intent):
+        """Recibe el resultado de startActivityForResult (galería)."""
+        RESULT_OK = -1
+        if request_code == 1001 and result_code == RESULT_OK and intent:
+            try:
+                uri = intent.getData()
+                if uri:
+                    local = resolve_shared_uri_to_path(uri.toString())
+                    if local:
+                        Clock.schedule_once(lambda dt: self._set_source(local))
+            except Exception as e:
+                self.status_text = str(e)
+
+    def open_clipboard(self):
+        """Lee una imagen del portapapeles y muestra diálogo de confirmación."""
+        if platform != 'android':
+            self.status_text = t('clipboard_empty')
+            return
         try:
-            from plyer import filechooser
-            def _cb(sel):
-                if sel:
-                    Clock.schedule_once(lambda dt: self._set_source(sel[0]))
-            filechooser.open_file(
-                on_selection=_cb,
-                filters=[('Images', '*.png', '*.jpg', '*.jpeg', '*.webp', '*.bmp')],
-            )
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            Context = autoclass('android.content.Context')
+            ClipboardManager = autoclass('android.content.ClipboardManager')
+            clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+
+            if not clipboard.hasPrimaryClip():
+                self.status_text = t('clipboard_empty')
+                return
+
+            clip = clipboard.getPrimaryClip()
+            if clip.getItemCount() == 0:
+                self.status_text = t('clipboard_empty')
+                return
+
+            item = clip.getItemAt(0)
+            uri = item.getUri()
+
+            if uri is None:
+                self.status_text = t('clipboard_empty')
+                return
+
+            local = resolve_shared_uri_to_path(uri.toString())
+            if not local:
+                self.status_text = t('clipboard_empty')
+                return
+
+            self._show_clipboard_preview(local)
+
         except Exception as e:
-            self.status_text = str(e)
+            self.status_text = t('clipboard_empty')
+            print(f'[Imgridroid] open_clipboard: {e}')
+
+    def _show_clipboard_preview(self, path):
+        """Muestra diálogo con miniatura y botones Importar/Descartar."""
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.image import Image as KivyImage
+        from kivy.uix.button import Button
+        from kivy.uix.label import Label
+
+        layout = BoxLayout(orientation='vertical', spacing='8dp', padding='12dp')
+        layout.add_widget(Label(
+            text=t('clipboard_preview'),
+            size_hint_y=None, height='30dp'
+        ))
+        layout.add_widget(KivyImage(
+            source=path,
+            fit_mode='contain',
+            size_hint_y=1,
+        ))
+        btn_row = BoxLayout(size_hint_y=None, height='48dp', spacing='8dp')
+
+        popup = Popup(
+            title='',
+            content=layout,
+            size_hint=(0.9, 0.7),
+        )
+
+        def _import(_):
+            popup.dismiss()
+            self._set_source(path)
+
+        btn_import = Button(text=t('import'))
+        btn_import.bind(on_release=_import)
+        btn_discard = Button(text=t('discard'))
+        btn_discard.bind(on_release=lambda _: popup.dismiss())
+
+        btn_row.add_widget(btn_import)
+        btn_row.add_widget(btn_discard)
+        layout.add_widget(btn_row)
+        popup.open()
 
     def _set_source(self, path):
         # Verificar tamaño máximo antes de aceptar la imagen
@@ -548,8 +671,7 @@ class ImgridroidApp(App):
             return
 
         self.source_path = path
-        self.preview_src_path = ''   # resetear para evitar usar copia vieja
-        self.result_image = ''
+        self.result_image = ''   # fuerza el refresco aunque el path sea el mismo
         self.result_image = path
         self._invalidate_result()
         self.status_text = t('preparing')
@@ -606,11 +728,6 @@ class ImgridroidApp(App):
     def generate(self):
         if not self.source_path:
             self.status_text = t('no_image')
-            return
-        if not self.preview_src_path:
-            # La copia de trabajo todavía no está lista — esperar
-            self.status_text = t('preparing')
-            Clock.schedule_once(lambda dt: self.generate(), 0.3)
             return
         # Usar copia reducida si está lista, si no usar original
         src = self.preview_src_path or self.source_path

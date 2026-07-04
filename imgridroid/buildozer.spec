@@ -7,7 +7,7 @@ package.domain = org.imgrid
 source.dir = src
 source.include_exts = py,png,jpg,jpeg,kv,atlas
 
-version = 0.1.0
+version = 0.2.0
 
 requirements = python3,kivy==2.3.1,pillow,pyimgrid,plyer,pyjnius
 
