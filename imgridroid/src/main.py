@@ -27,7 +27,7 @@ from kivy.utils import platform
 from pyimgrid import create_image
 
 VERSION = '0.2.0'
-DEFAULT_BG_HEX = '#FFFFFF'
+DEFAULT_BG_HEX = '#FFFFFFFF'
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -278,7 +278,7 @@ BoxLayout:
         opacity: 1 if app.result_image else 0
         canvas.before:
             Color:
-                rgba: 0, 0, 0, 1
+                rgba: app.bg_rgba
             Rectangle:
                 pos: self.pos
                 size: self.size
@@ -542,9 +542,14 @@ class ImgridroidApp(App):
                 Intent = autoclass('android.content.Intent')
                 MediaStore = autoclass('android.provider.MediaStore')
                 PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                intent = Intent(Intent.ACTION_PICK)
+                # ACTION_GET_CONTENT con CATEGORY_OPENABLE abre el selector
+                # completo: galería, almacenamiento compartido, apps de archivos, etc.
+                intent = Intent(Intent.ACTION_GET_CONTENT)
                 intent.setType('image/*')
-                PythonActivity.mActivity.startActivityForResult(intent, 1001)
+                intent.addCategory(Intent.CATEGORY_OPENABLE)
+                String = autoclass('java.lang.String')
+                chooser = Intent.createChooser(intent, String(t('choose_image')))
+                PythonActivity.mActivity.startActivityForResult(chooser, 1001)
                 # El resultado llega via on_activity_result
             except Exception as e:
                 self.status_text = str(e)
@@ -718,8 +723,8 @@ class ImgridroidApp(App):
         popup = Popup(title=t('bg_color'), content=picker, size_hint=(0.9, 0.9))
         def _on_color(_inst, value):
             self.bg_rgba = value
-            r, g, b = (int(c * 255) for c in value[:3])
-            self.bg_hex = f'#{r:02X}{g:02X}{b:02X}'
+            r, g, b, a = (int(c * 255) for c in value[:4])
+            self.bg_hex = f'#{r:02X}{g:02X}{b:02X}{a:02X}'
             self._invalidate_result()
         picker.bind(color=_on_color)
         popup.open()
