@@ -20,14 +20,14 @@ from kivy.clock import Clock, mainthread
 from kivy.lang import Builder
 from kivy.properties import (
     BooleanProperty, ListProperty, NumericProperty,
-    StringProperty,
+    ObjectProperty, StringProperty,
 )
 from kivy.utils import platform
 
 from pyimgrid import create_image
 
 VERSION = '0.2.0'
-DEFAULT_BG_HEX = '#FFFFFFFF'
+DEFAULT_BG_HEX = None   # None = transparente (se pasa directo a create_image)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -393,9 +393,14 @@ BoxLayout:
             valign: 'middle'
             text_size: self.size
         Button:
-            text: app.bg_hex
-            background_color: app.bg_rgba
+            text: app.bg_hex if app.bg_hex else 'Transparente'
+            background_color: app.bg_rgba if app.bg_hex else (0.3, 0.3, 0.3, 1)
             on_release: app.open_color_picker()
+        Button:
+            text: '\u2715'
+            size_hint_x: None
+            width: dp(36)
+            on_release: app.reset_bg_color()
 
     Button:
         text: app.tr('generate')
@@ -440,7 +445,7 @@ class ImgridroidApp(App):
     cols    = NumericProperty(3)
     rows    = NumericProperty(3)
     gap     = NumericProperty(0)
-    bg_hex  = StringProperty(DEFAULT_BG_HEX)
+    bg_hex  = ObjectProperty(None, allownone=True)  # None = transparente; '#RRGGBB' = color
     bg_rgba = ListProperty([1, 1, 1, 1])
 
     has_result  = BooleanProperty(False)
@@ -723,11 +728,17 @@ class ImgridroidApp(App):
         popup = Popup(title=t('bg_color'), content=picker, size_hint=(0.9, 0.9))
         def _on_color(_inst, value):
             self.bg_rgba = value
-            r, g, b, a = (int(c * 255) for c in value[:4])
-            self.bg_hex = f'#{r:02X}{g:02X}{b:02X}{a:02X}'
+            r, g, b = (int(c * 255) for c in value[:3])
+            self.bg_hex = f'#{r:02X}{g:02X}{b:02X}'
             self._invalidate_result()
         picker.bind(color=_on_color)
         popup.open()
+
+    def reset_bg_color(self):
+        """Vuelve al fondo transparente (None)."""
+        self.bg_hex = None
+        self.bg_rgba = [1, 1, 1, 1]
+        self._invalidate_result()
 
     # ── Generar (preview rápida sobre copia reducida) ──────────────────
     def generate(self):
@@ -739,7 +750,7 @@ class ImgridroidApp(App):
         self.status_text = t('generating')
         self.has_result = False
         name, _ = splitext(basename(self.source_path))
-        bg = self.bg_hex.lstrip('#')
+        bg = self.bg_hex.lstrip('#') if self.bg_hex else 'transparent'
         out = join(get_cache_dir(),
                    f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}.png')
         Thread(
@@ -751,7 +762,7 @@ class ImgridroidApp(App):
     def _run_generate(self, src, dst):
         try:
             create_image(src, dst, int(self.cols), int(self.rows),
-                         int(self.gap), self.bg_hex)
+                         int(self.gap), self.bg_hex or None)
             Clock.schedule_once(lambda dt: self._on_done(True, dst, None))
         except Exception as e:
             Clock.schedule_once(lambda dt: self._on_done(False, dst, e))
@@ -787,12 +798,12 @@ class ImgridroidApp(App):
         """Genera el resultado a resolución completa y luego comparte o guarda."""
         try:
             name, _ = splitext(basename(self.source_path))
-            bg = self.bg_hex.lstrip('#')
+            bg = self.bg_hex.lstrip('#') if self.bg_hex else 'transparent'
             out = join(get_cache_dir(),
                        f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}_full.png')
             create_image(self.source_path, out,
                          int(self.cols), int(self.rows),
-                         int(self.gap), self.bg_hex)
+                         int(self.gap), self.bg_hex or None)
             Clock.schedule_once(lambda dt: self._on_full_ready(action, out))
         except Exception as e:
             Clock.schedule_once(
