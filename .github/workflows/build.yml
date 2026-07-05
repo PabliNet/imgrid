@@ -61,13 +61,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('imgridroid/buildozer.spec') }}
+          key: buildozer-global-v2-${{ hashFiles('imgridroid/buildozer.spec') }}
 
       - name: Cache Buildozer project directory
         uses: actions/cache@v4
         with:
           path: imgridroid/.buildozer
-          key: ${{ runner.os }}-buildozer-${{ hashFiles('imgridroid/buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v2-${{ hashFiles('imgridroid/buildozer.spec') }}
 
       - name: Pull kivy/buildozer image
         run: docker pull kivy/buildozer:latest
