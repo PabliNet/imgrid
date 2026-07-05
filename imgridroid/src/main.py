@@ -380,24 +380,27 @@ BoxLayout:
             valign: 'middle'
             text_size: None, self.height
 
-    # ── Fondo ─────────────────────────────────────────────────────────
+    # ── Rotacion y Fondo ──────────────────────────────────────────────
     BoxLayout:
         size_hint_y: None
         height: dp(36)
         spacing: dp(8)
-        Label:
-            text: app.tr('bg_color')
+        Button:
+            text: '<<'
             size_hint_x: None
-            width: dp(110)
-            halign: 'left'
-            valign: 'middle'
-            text_size: self.size
+            width: dp(36)
+            on_release: app.rotate_image(-90)
+        Button:
+            text: '>>'
+            size_hint_x: None
+            width: dp(36)
+            on_release: app.rotate_image(90)
         Button:
             text: app.bg_hex if app.bg_hex else 'Transparente'
             background_color: app.bg_rgba if app.bg_hex else (0.3, 0.3, 0.3, 1)
             on_release: app.open_color_picker()
         Button:
-            text: '\u2715'
+            text: 'X'
             size_hint_x: None
             width: dp(36)
             on_release: app.reset_bg_color()
@@ -739,6 +742,25 @@ class ImgridroidApp(App):
         self.bg_hex = None
         self.bg_rgba = [1, 1, 1, 1]
         self._invalidate_result()
+
+    def rotate_image(self, degrees):
+        """Rota la imagen fuente y actualiza el preview."""
+        if not self.source_path:
+            return
+        try:
+            from PIL import Image as PILImage
+            with PILImage.open(self.source_path) as img:
+                rotated = img.rotate(-degrees, expand=True)
+                rotated.save(self.source_path)
+            if self.preview_src_path:
+                with PILImage.open(self.preview_src_path) as img:
+                    rotated = img.rotate(-degrees, expand=True)
+                    rotated.save(self.preview_src_path)
+            self._invalidate_result()
+            self.result_image = ''
+            self.result_image = self.preview_src_path or self.source_path
+        except Exception as e:
+            print(f'[Imgridroid] rotate_image: {e}')
 
     # ── Generar (preview rápida sobre copia reducida) ──────────────────
     def generate(self):
