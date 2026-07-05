@@ -749,6 +749,7 @@ class ImgridroidApp(App):
             return
         try:
             from PIL import Image as PILImage
+            from kivy.core.image import Image as CoreImage
             with PILImage.open(self.source_path) as img:
                 rotated = img.rotate(-degrees, expand=True)
                 rotated.save(self.source_path)
@@ -757,8 +758,11 @@ class ImgridroidApp(App):
                     rotated = img.rotate(-degrees, expand=True)
                     rotated.save(self.preview_src_path)
             self._invalidate_result()
+            # Limpiamos la caché de texturas de Kivy para forzar recarga
+            path = self.preview_src_path or self.source_path
+            CoreImage.remove_from_cache(path)
             self.result_image = ''
-            self.result_image = self.preview_src_path or self.source_path
+            self.result_image = path
         except Exception as e:
             print(f'[Imgridroid] rotate_image: {e}')
 
