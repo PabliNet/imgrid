@@ -278,7 +278,7 @@ BoxLayout:
         opacity: 1 if app.result_image else 0
         canvas.before:
             Color:
-                rgba: app.bg_rgba
+                rgba: 0, 0, 0, 1
             Rectangle:
                 pos: self.pos
                 size: self.size
