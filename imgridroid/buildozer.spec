@@ -28,8 +28,9 @@ android.permissions = READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STO
 # correctamente porque el template ya tiene xmlns:android declarado.
 android.manifest.intent_filters = src/android_extra/intent_filters.xml
 
-# file_paths.xml va a res/xml/ para que el FileProvider pueda
-# referenciarlo como @xml/file_paths.
+# file_paths.xml va a res/xml/ (buildozer copia esto correctamente vía
+# el flag --res_xml de python-for-android) para que el FileProvider
+# pueda referenciarlo como @xml/file_paths.
 android.res_xml = src/android_extra/file_paths.xml
 
 # Hook que inyecta el <provider> del FileProvider en el manifest
