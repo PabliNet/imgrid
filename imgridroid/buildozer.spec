@@ -23,11 +23,20 @@ android.accept_sdk_license = True
 
 android.permissions = READ_MEDIA_IMAGES,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
+# Intent-filters para recibir imágenes compartidas / "Abrir con".
+# p4a los inserta dentro de <activity> en el manifest — funciona
+# correctamente porque el template ya tiene xmlns:android declarado.
+android.manifest.intent_filters = src/android_extra/intent_filters.xml
+
 # file_paths.xml va a res/xml/ para que el FileProvider pueda
-# referenciarlo como @xml/file_paths. El <provider> se inyecta en el
-# manifest vía apktool + patch_manifest.py en el build.yml (no desde
-# buildozer, que no tiene un mecanismo confiable para esto).
+# referenciarlo como @xml/file_paths.
 android.res_xml = src/android_extra/file_paths.xml
+
+# Hook que inyecta el <provider> del FileProvider en el manifest
+# generado, en el momento before_apk_build (manifest ya renderizado,
+# Gradle todavía no compiló). Esto reemplaza el paso de apktool en
+# build.yml y permite publicar en F-Droid sin post-procesamiento.
+p4a.hook = src/p4a_hook.py
 
 android.enable_androidx = True
 android.gradle_dependencies = androidx.core:core:1.13.1
