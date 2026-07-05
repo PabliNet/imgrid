@@ -13,7 +13,7 @@ from time import time
 from os import makedirs
 from os.path import join, basename, splitext
 from shutil import copyfile
-from threading import Thread
+from threading import Thread, Lock
 
 from kivy.app import App
 from kivy.clock import Clock, mainthread
@@ -28,6 +28,8 @@ from pyimgrid import create_image
 
 VERSION = '0.2.0'
 DEFAULT_BG_HEX = None   # None = transparente (se pasa directo a create_image)
+
+_image_lock = Lock()   # protege acceso concurrente a source_path y preview_src_path
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -146,8 +148,33 @@ def request_storage_permissions():
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# Intent entrante ("Compartir" / "Abrir con" desde otra app)
+# EXIF orientation fix
 # ─────────────────────────────────────────────────────────────────────────
+def fix_exif_orientation(path):
+    """Aplica la orientación EXIF y guarda la imagen correctamente rotada.
+    Después de esto el archivo ya no tiene datos EXIF de orientación — la
+    rotación está quemada en los píxeles, lo que evita sorpresas en PIL y Kivy.
+    """
+    try:
+        from PIL import Image as PILImage, ExifTags
+        with PILImage.open(path) as img:
+            exif = img._getexif()
+            if exif is None:
+                return
+            orientation_key = next(
+                k for k, v in ExifTags.TAGS.items() if v == 'Orientation'
+            )
+            orientation = exif.get(orientation_key)
+            rotation = {3: 180, 6: 270, 8: 90}.get(orientation)
+            if rotation is None:
+                return
+            rotated = img.rotate(rotation, expand=True)
+            rotated.save(path)
+    except Exception as e:
+        print(f'[Imgridroid] fix_exif_orientation: {e}')
+
+
+
 def resolve_shared_uri_to_path(uri_str):
     if platform != 'android':
         return uri_str or None
@@ -189,6 +216,7 @@ def resolve_shared_uri_to_path(uri_str):
             out.write(buf, 0, n)
         out.close()
         input_stream.close()
+        fix_exif_orientation(dest_path)
         return dest_path
     except Exception as e:
         print(f'[Imgridroid] resolve_shared_uri_to_path: {e}')
@@ -380,21 +408,18 @@ BoxLayout:
             valign: 'middle'
             text_size: None, self.height
 
-    # ── Rotacion y Fondo ──────────────────────────────────────────────
+    # ── Fondo ─────────────────────────────────────────────────────────
     BoxLayout:
         size_hint_y: None
         height: dp(36)
         spacing: dp(8)
-        Button:
-            text: '<<'
+        Label:
+            text: app.tr('bg_color')
             size_hint_x: None
-            width: dp(36)
-            on_release: app.rotate_image(-90)
-        Button:
-            text: '>>'
-            size_hint_x: None
-            width: dp(36)
-            on_release: app.rotate_image(90)
+            width: dp(110)
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
         Button:
             text: app.bg_hex if app.bg_hex else 'Transparente'
             background_color: app.bg_rgba if app.bg_hex else (0.3, 0.3, 0.3, 1)
@@ -684,6 +709,7 @@ class ImgridroidApp(App):
             return
 
         self.source_path = path
+        fix_exif_orientation(path)
         self.result_image = ''   # fuerza el refresco aunque el path sea el mismo
         self.result_image = path
         self._invalidate_result()
@@ -707,7 +733,8 @@ class ImgridroidApp(App):
         ).start()
 
     def _prepare_preview_copy(self, path, w, h):
-        preview = make_preview_copy(path, w, h)
+        with _image_lock:
+            preview = make_preview_copy(path, w, h)
         Clock.schedule_once(lambda dt: self._on_preview_copy_ready(preview))
 
     @mainthread
@@ -743,29 +770,6 @@ class ImgridroidApp(App):
         self.bg_rgba = [1, 1, 1, 1]
         self._invalidate_result()
 
-    def rotate_image(self, degrees):
-        """Rota la imagen fuente y actualiza el preview."""
-        if not self.source_path:
-            return
-        try:
-            from PIL import Image as PILImage
-            from kivy.core.image import Image as CoreImage
-            with PILImage.open(self.source_path) as img:
-                rotated = img.rotate(-degrees, expand=True)
-                rotated.save(self.source_path)
-            if self.preview_src_path:
-                with PILImage.open(self.preview_src_path) as img:
-                    rotated = img.rotate(-degrees, expand=True)
-                    rotated.save(self.preview_src_path)
-            self._invalidate_result()
-            # Limpiamos la caché de texturas de Kivy para forzar recarga
-            path = self.preview_src_path or self.source_path
-            CoreImage.remove_from_cache(path)
-            self.result_image = ''
-            self.result_image = path
-        except Exception as e:
-            print(f'[Imgridroid] rotate_image: {e}')
-
     # ── Generar (preview rápida sobre copia reducida) ──────────────────
     def generate(self):
         if not self.source_path:
@@ -787,8 +791,9 @@ class ImgridroidApp(App):
 
     def _run_generate(self, src, dst):
         try:
-            create_image(src, dst, int(self.cols), int(self.rows),
-                         int(self.gap), self.bg_hex or None)
+            with _image_lock:
+                create_image(src, dst, int(self.cols), int(self.rows),
+                             int(self.gap), self.bg_hex or None)
             Clock.schedule_once(lambda dt: self._on_done(True, dst, None))
         except Exception as e:
             Clock.schedule_once(lambda dt: self._on_done(False, dst, e))
@@ -827,10 +832,15 @@ class ImgridroidApp(App):
             bg = self.bg_hex.lstrip('#') if self.bg_hex else 'transparent'
             out = join(get_cache_dir(),
                        f'{name}_{self.cols}x{self.rows}_g{self.gap}_{bg}_full.png')
-            create_image(self.source_path, out,
-                         int(self.cols), int(self.rows),
-                         int(self.gap), self.bg_hex or None)
+            with _image_lock:
+                create_image(self.source_path, out,
+                             int(self.cols), int(self.rows),
+                             int(self.gap), self.bg_hex or None)
             Clock.schedule_once(lambda dt: self._on_full_ready(action, out))
+        except Exception as e:
+            Clock.schedule_once(
+                lambda dt: setattr(self, 'status_text', t('generate_error')))
+            print(f'[Imgridroid] _generate_full_then: {e}')
         except Exception as e:
             Clock.schedule_once(
                 lambda dt: setattr(self, 'status_text', t('generate_error')))
