@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────────────────
+# BORRADOR de metadata para F-Droid — org.imgrid.imgridroid.yml
+#
+# Basado en el ejemplo real de "kivy-hello-world", una app Kivy/Buildozer
+# ya aceptada en F-Droid:
+#   https://gitlab.com/uak/kivy-hello-world
+#   https://gitlab.com/uak/fdroiddata (metadata real)
+#
+# ESTO ES UN PUNTO DE PARTIDA, NO UN ARCHIVO LISTO PARA ENVIAR.
+# Revisá cada TODO antes de proponerlo. El build de F-Droid corre en su
+# propio servidor Debian, con su propia versión de buildozer/p4a — es
+# muy probable que necesites iterar (como hicimos hoy con el hook del
+# FileProvider) hasta que el build pase en SU entorno específico.
+# ─────────────────────────────────────────────────────────────────────────
+
+Categories:
+  - Graphics
+  - Photography
+
+License: GPL-3.0-only
+# TODO: confirmá si tu LICENSE incluye la cláusula "or (at your option)
+# any later version" en el header de tus archivos fuente. Si es así,
+# usá GPL-3.0-or-later en vez de GPL-3.0-only.
+
+AuthorName: PabliNet
+SourceCode: https://github.com/PabliNet/imgrid
+IssueTracker: https://github.com/PabliNet/imgrid/issues
+
+AutoName: Imgridroid
+Summary: Crea cuadrículas de imágenes tipo collage
+Description: |-
+  Imgrid genera cuadrículas (grillas) a partir de una imagen, repitiéndola
+  en un número configurable de filas y columnas, con separación y color
+  de fondo ajustables. Pensada para collages y contenido tipo "grid post".
+
+RepoType: git
+Repo: https://github.com/PabliNet/imgrid.git
+
+Builds:
+  - versionName: '0.2.0'
+    versionCode: 1
+    # TODO: reemplazá por el commit hash real que querés publicar.
+    # Ejemplo (HEAD actual al momento de armar este borrador):
+    commit: fe930fea7d1941f23058c500f82ccfda1f83877b
+    subdir: imgridroid
+
+    sudo:
+      - apt-get update || apt-get update
+      - apt-get install -y build-essential libffi-dev libltdl-dev
+        openjdk-17-jdk-headless librsvg2-bin wget unzip
+      - update-alternatives --auto java
+
+    # buildozer y cpython se construyen desde código fuente, no se
+    # bajan binarios de PyPI para el toolchain en sí (los requirements
+    # del [app] —kivy, pillow, pyimgrid, plyer, pyjnius— buildozer los
+    # instala vía pip dentro de su propio venv aislado, eso es normal
+    # y esperado en el ecosistema Kivy/p4a).
+    srclibs:
+      - buildozer@1.5.0
+
+    prebuild:
+      - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      # El icono se genera desde el SVG en el repo raíz, igual que en
+      # tu build.yml de GitHub Actions:
+      - rsvg-convert -w 512 -h 512 ../imgrid.svg -o src/icon.png
+
+    build:
+      - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - $$buildozer$$/buildozer/scripts/buildozer.py android release
+
+    output: bin/Imgridroid-*-release-unsigned.apk
+
+    # TODO: puede que necesites ajustar target/ndk versions si el
+    # entorno de F-Droid no tiene exactamente el mismo NDK/SDK que
+    # buildozer intenta descargar por su cuenta (a veces hay que
+    # pinnear android.ndk / android.sdk explícitamente en el
+    # buildozer.spec para que coincida con lo disponible offline
+    # en su servidor).
+
+AutoUpdateMode: None
+UpdateCheckMode: None
+CurrentVersion: '0.2.0'
+CurrentVersionCode: 1

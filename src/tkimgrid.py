@@ -12,10 +12,9 @@ from pathlib import Path
 from tkinter import colorchooser, filedialog
 
 from cairosvg import svg2png
-from PIL import Image, ImageTk
 from pyimgrid import create_image
 
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -63,6 +62,8 @@ messages = {
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada en: {}',
         'transparent': 'Transparente',
+        'pil_imagetk': ('Instalar:\n'
+            '  \x1b[7mapt install python3-pil.imagetk\x1b[27m'),
     },
     'en': {
         'title':       'Image to grid',
@@ -83,6 +84,8 @@ messages = {
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved at: {}',
         'transparent': 'Transparent',
+        'pil_imagetk': ('Install:\n'
+            '  \x1b[7mapt install python3-pil.imagetk\x1b[27m'),
     },
 }
 
@@ -153,10 +156,15 @@ class App(tk.Tk):
         if not svg_path.is_file():
             svg_path = Path('/usr/share/pixmaps/imgrid.svg')
         try:
-            png_data = svg2png(
-                url=str(svg_path), output_width=64, output_height=64
-            )
-            img = Image.open(BytesIO(png_data))
+            from PIL import Image, ImageTk
+        except ImportError:
+            print(tk_msg('pil_imagetk'))
+            return    # sin ImageTk no hay ícono; la ventana usa el default
+
+        try:
+            png_data = svg2png(url=str(svg_path))    # tamaño natural: evita
+            img = Image.open(BytesIO(png_data))       # el recorte de cairosvg
+            img = img.resize((64, 64), Image.LANCZOS) # cuando falta width/height
             self._icon = ImageTk.PhotoImage(img)
             self.iconphoto(True, self._icon)
         except Exception:

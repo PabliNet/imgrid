@@ -20,7 +20,7 @@ from gi.repository import GObject, Gtk, Gdk, Gio, GLib, GdkPixbuf
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -55,6 +55,7 @@ messages = {
         'load_image':  'CARGAR IMAGEN',
         'background':  'FONDO',
         'save_image':  'GUARDAR IMAGEN',
+        'copy_image':  'COPIAR',
         'color_title': 'Elegir color de fondo',
         'open_title':  'Seleccionar imagen',
         'open_types':  'Imágenes',
@@ -68,6 +69,7 @@ messages = {
         'err_min':     "'{}' debe ser mayor a {}.",
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada',
+        'copy_ok':     'Imagen copiada al portapapeles',
         'open_folder': 'Abrir carpeta',
         'view_image':  'Ver imagen',
         'transparent': 'Transparente',
@@ -78,6 +80,7 @@ messages = {
         'load_image':  'LOAD IMAGE',
         'background':  'BACKGROUND',
         'save_image':  'SAVE IMAGE',
+        'copy_image':  'COPY',
         'color_title': 'Choose background color',
         'open_title':  'Select image',
         'open_types':  'Images',
@@ -91,6 +94,7 @@ messages = {
         'err_min':     "'{}' must be greater than {}.",
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved',
+        'copy_ok':     'Image copied to clipboard',
         'open_folder': 'Open folder',
         'view_image':  'View image',
         'transparent': 'Transparent',
@@ -148,8 +152,25 @@ class AppWindow(Gtk.ApplicationWindow):
         # Id del timeout de debounce para regenerar la vista previa
         self._preview_timeout_id = None
 
+        # Archivo temporal donde se vuelca la imagen pegada del portapapeles
+        self._clipboard_file = NamedTemporaryFile(
+            prefix='gtkimgrid_clip_', suffix='.png', delete=False
+        )
+        self._clipboard_img_path = self._clipboard_file.name
+        self._clipboard_file.close()
+
+        # Archivo temporal para la imagen generada a copiar al portapapeles
+        self._copy_file = NamedTemporaryFile(
+            prefix='gtkimgrid_copy_', suffix='.png', delete=False
+        )
+        self._copy_out_path = self._copy_file.name
+        self._copy_file.close()
+
         # GTK3: 'delete-event' en lugar de 'close-request'
         self.connect('delete-event', self._on_delete_event)
+
+        # Ctrl+V pega una imagen del portapapeles (atajo estándar del entorno)
+        self.connect('key-press-event', self._on_key_press_event)
 
         self._build_ui()
 
@@ -266,10 +287,19 @@ class AppWindow(Gtk.ApplicationWindow):
         self._lbl_color.set_justify(Gtk.Justification.CENTER)
         root.pack_start(self._lbl_color, False, False, 0)
 
-        # ── SAVE IMAGE ───────────────────────────────────────────────
+        # ── SAVE IMAGE / COPIAR ──────────────────────────────────────
+        box_gen = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box_gen.set_homogeneous(True)
+
         self._btn_gen = Gtk.Button(label=tk_msg('save_image'))
         self._btn_gen.connect('clicked', self._on_generate_clicked)
-        root.pack_start(self._btn_gen, False, False, 0)
+        box_gen.pack_start(self._btn_gen, True, True, 0)
+
+        self._btn_copy = Gtk.Button(label=tk_msg('copy_image'))
+        self._btn_copy.connect('clicked', self._on_copy_clicked)
+        box_gen.pack_start(self._btn_copy, True, True, 0)
+
+        root.pack_start(box_gen, False, False, 0)
 
         # ── MENSAJE DE ESTADO ────────────────────────────────────────
         box_status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -387,6 +417,26 @@ class AppWindow(Gtk.ApplicationWindow):
             Gtk.drag_finish(drag_context, True, False, time)
         else:
             Gtk.drag_finish(drag_context, False, False, time)
+
+    def _on_key_press_event(self, widget, event):
+        """Detecta Ctrl+V (o Cmd+V) y pega una imagen del portapapeles."""
+        if event.keyval in (Gdk.KEY_v, Gdk.KEY_V) and \
+                event.state & Gdk.ModifierType.CONTROL_MASK:
+            self._paste_from_clipboard()
+            return True
+        return False
+
+    def _paste_from_clipboard(self):
+        """Toma la imagen del portapapeles (si hay) y la carga como entrada."""
+        clipboard = Gtk.Clipboard.get_default(Gdk.Display.get_default())
+        pixbuf = clipboard.wait_for_image()
+        if pixbuf is None:
+            return
+        try:
+            pixbuf.savev(self._clipboard_img_path, 'png', [], [])
+            self._load_image(self._clipboard_img_path)
+        except Exception as e:
+            self._show_error(str(e))
 
     def _on_open_clicked(self, button):
         """Abre el diálogo para seleccionar la imagen de entrada."""
@@ -547,7 +597,8 @@ class AppWindow(Gtk.ApplicationWindow):
         if self._preview_timeout_id is not None:
             GLib.source_remove(self._preview_timeout_id)
             self._preview_timeout_id = None
-        for path in (self._preview_path, self._preview_src_path):
+        for path in (self._preview_path, self._preview_src_path,
+                     self._clipboard_img_path, self._copy_out_path):
             try:
                 Path(path).unlink(missing_ok=True)
             except Exception:
@@ -630,6 +681,34 @@ class AppWindow(Gtk.ApplicationWindow):
             return
         uri = Gio.File.new_for_path(self._output_path).get_uri()
         Gio.AppInfo.launch_default_for_uri(uri, None)
+
+    def _on_copy_clicked(self, button):
+        """Genera la imagen final y la copia al portapapeles."""
+        inp = self._image_path.strip()
+        if not inp:
+            self._show_error(tk_msg('err_no_img'))
+            return
+
+        cols = self._spin_cols.get_value_as_int()
+        rows = self._spin_rows.get_value_as_int()
+        gap  = self._spin_gap.get_value_as_int()
+
+        try:
+            create_image(
+                src=inp,
+                dst=self._copy_out_path,
+                cols=cols,
+                rows=rows,
+                gap=gap,
+                bg=self._bg_color,
+            )
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file(self._copy_out_path)
+            clipboard = Gtk.Clipboard.get_default(Gdk.Display.get_default())
+            clipboard.set_image(pixbuf)
+            clipboard.store()
+            self._show_ok(tk_msg('copy_ok'))
+        except Exception as e:
+            self._show_error(str(e))
 
     # ------------------------------------------------------------------
     # Generar imagen final

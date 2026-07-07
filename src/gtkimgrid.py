@@ -20,7 +20,7 @@ from gi.repository import GObject, Gtk, Gdk, Gio, GLib, GdkPixbuf
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.0.3'
+VERSION = '0.2.0'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -55,6 +55,7 @@ messages = {
         'load_image':  'CARGAR IMAGEN',
         'background':  'FONDO',
         'save_image':  'GUARDAR IMAGEN',
+        'copy_image':  'COPIAR',
         'color_title': 'Elegir color de fondo',
         'open_title':  'Seleccionar imagen',
         'open_types':  'Imágenes',
@@ -68,6 +69,7 @@ messages = {
         'err_min':     "'{}' debe ser mayor a {}.",
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada',
+        'copy_ok':     'Imagen copiada al portapapeles',
         'open_folder': 'Abrir carpeta',
         'view_image':  'Ver imagen',
         'transparent': 'Transparente',
@@ -78,6 +80,7 @@ messages = {
         'load_image':  'LOAD IMAGE',
         'background':  'BACKGROUND',
         'save_image':  'SAVE IMAGE',
+        'copy_image':  'COPY',
         'color_title': 'Choose background color',
         'open_title':  'Select image',
         'open_types':  'Images',
@@ -91,6 +94,7 @@ messages = {
         'err_min':     "'{}' must be greater than {}.",
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved',
+        'copy_ok':     'Image copied to clipboard',
         'open_folder': 'Open folder',
         'view_image':  'View image',
         'transparent': 'Transparent',
@@ -148,7 +152,26 @@ class AppWindow(Gtk.ApplicationWindow):
         # Id del timeout de debounce para regenerar la vista previa
         self._preview_timeout_id = None
 
+        # Archivo temporal donde se vuelca la imagen pegada del portapapeles
+        self._clipboard_file = NamedTemporaryFile(
+            prefix='gtkimgrid_clip_', suffix='.png', delete=False
+        )
+        self._clipboard_img_path = self._clipboard_file.name
+        self._clipboard_file.close()
+
+        # Archivo temporal para la imagen generada a copiar al portapapeles
+        self._copy_file = NamedTemporaryFile(
+            prefix='gtkimgrid_copy_', suffix='.png', delete=False
+        )
+        self._copy_out_path = self._copy_file.name
+        self._copy_file.close()
+
         self.connect('close-request', self._on_close_request)
+
+        # Ctrl+V pega una imagen del portapapeles (atajo estándar del entorno)
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect('key-pressed', self._on_key_pressed)
+        self.add_controller(key_controller)
 
         self._build_ui()
 
@@ -241,6 +264,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
         self._btn_bg = Gtk.Button(label=tk_msg('background'))
         self._btn_bg.set_hexpand(True)
+        self._btn_bg.set_name('bg-color-button')    # selector CSS #bg-color-button
         self._btn_bg.connect('clicked', self._on_pick_color)
         box_bg.append(self._btn_bg)
 
@@ -258,10 +282,19 @@ class AppWindow(Gtk.ApplicationWindow):
         self._lbl_color.set_justify(Gtk.Justification.CENTER)
         root.append(self._lbl_color)
 
-        # ── SAVE IMAGE ───────────────────────────────────────────────
+        # ── SAVE IMAGE / COPIAR ──────────────────────────────────────
+        box_gen = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box_gen.set_homogeneous(True)
+
         self._btn_gen = Gtk.Button(label=tk_msg('save_image'))
         self._btn_gen.connect('clicked', self._on_generate_clicked)
-        root.append(self._btn_gen)
+        box_gen.append(self._btn_gen)
+
+        self._btn_copy = Gtk.Button(label=tk_msg('copy_image'))
+        self._btn_copy.connect('clicked', self._on_copy_clicked)
+        box_gen.append(self._btn_copy)
+
+        root.append(box_gen)
 
         # ── MENSAJE DE ESTADO ────────────────────────────────────────
         box_status = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -368,52 +401,76 @@ class AppWindow(Gtk.ApplicationWindow):
             return True
         return False
 
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        """Detecta Ctrl+V (o Cmd+V) y pega una imagen del portapapeles."""
+        if keyval in (Gdk.KEY_v, Gdk.KEY_V) and \
+                state & Gdk.ModifierType.CONTROL_MASK:
+            self._paste_from_clipboard()
+            return True
+        return False
+
+    def _paste_from_clipboard(self):
+        """Pide la imagen del portapapeles (si hay) de forma asincrónica."""
+        clipboard = self.get_clipboard()
+        clipboard.read_texture_async(None, self._on_clipboard_texture_ready)
+
+    def _on_clipboard_texture_ready(self, clipboard, result):
+        """Recibe la textura del portapapeles y la carga como entrada."""
+        try:
+            texture = clipboard.read_texture_finish(result)
+        except GLib.Error:
+            texture = None
+        if texture is None:
+            return
+        try:
+            texture.save_to_png(self._clipboard_img_path)
+            self._load_image(self._clipboard_img_path)
+        except Exception as e:
+            self._show_error(str(e))
+
     def _on_open_clicked(self, button):
         """Abre el diálogo para seleccionar la imagen de entrada."""
-        dialog = Gtk.FileChooserNative.new(
-            tk_msg('open_title'),
-            self,
-            Gtk.FileChooserAction.OPEN,
-            None,
-            None,
-        )
-        dialog.set_current_folder(Gio.File.new_for_path(str(_get_pictures_dir())))
+        dialog = Gtk.FileDialog()
+        dialog.set_title(tk_msg('open_title'))
+        dialog.set_initial_folder(Gio.File.new_for_path(str(_get_pictures_dir())))
 
         filter_images = Gtk.FileFilter()
         filter_images.set_name(tk_msg('open_types'))
         for ext in ('*.jpeg', '*.jpg', '*.png'):
             filter_images.add_pattern(ext)
-        dialog.add_filter(filter_images)
 
         filter_all = Gtk.FileFilter()
         filter_all.set_name(tk_msg('open_all'))
         filter_all.add_pattern('*')
-        dialog.add_filter(filter_all)
-        dialog.set_filter(filter_images)
 
-        dialog.connect('response', self._on_open_dialog_response)
-        dialog.show()
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filter_images)
+        filters.append(filter_all)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(filter_images)
+
+        dialog.open(self, None, self._on_open_dialog_finish)
         self._open_dialog = dialog    # mantener referencia viva
 
-    def _on_open_dialog_response(self, dialog, response):
-        if response == Gtk.ResponseType.ACCEPT:
-            file = dialog.get_file()
-            if file:
-                path = file.get_path()
-                if path:
-                    self._load_image(path)
-        dialog.destroy()
+    def _on_open_dialog_finish(self, dialog, result):
+        try:
+            file = dialog.open_finish(result)
+        except GLib.Error:
+            file = None
         self._open_dialog = None
+        if file:
+            path = file.get_path()
+            if path:
+                self._load_image(path)
 
     def _on_reset_color(self, button):
         """Resetea el fondo a transparente (None)."""
         self._bg_color = None
-        self._btn_bg.set_name('')
-        self._btn_bg.remove_css_class('bg-color-button')
-        ctx = self._btn_bg.get_style_context()
         provider = getattr(self, '_bg_css_provider', None)
         if provider is not None:
-            ctx.remove_provider(provider)
+            Gtk.StyleContext.remove_provider_for_display(
+                Gdk.Display.get_default(), provider
+            )
             self._bg_css_provider = None
         self._lbl_color.set_text(tk_msg('transparent'))
         self._lbl_color.set_markup(
@@ -423,40 +480,51 @@ class AppWindow(Gtk.ApplicationWindow):
 
     def _on_pick_color(self, button):
         """Abre el selector de color para el fondo."""
-        dialog = Gtk.ColorChooserDialog(title=tk_msg('color_title'), transient_for=self)
+        dialog = Gtk.ColorDialog()
+        dialog.set_title(tk_msg('color_title'))
+
+        initial_rgba = None
         if self._bg_color:
-            rgba = Gdk.RGBA()
-            rgba.parse(self._bg_color)
-            dialog.set_rgba(rgba)
-        dialog.connect('response', self._on_color_dialog_response)
-        dialog.show()
+            initial_rgba = Gdk.RGBA()
+            initial_rgba.parse(self._bg_color)
+
+        dialog.choose_rgba(
+            self, initial_rgba, None, self._on_color_dialog_finish
+        )
         self._color_dialog = dialog    # mantener referencia viva
 
-    def _on_color_dialog_response(self, dialog, response):
-        if response == Gtk.ResponseType.OK:
-            rgba = dialog.get_rgba()
-            color = '#{:02x}{:02x}{:02x}'.format(
-                round(rgba.red * 255),
-                round(rgba.green * 255),
-                round(rgba.blue * 255),
-            )
-            self._bg_color = color
-
-            provider = Gtk.CssProvider()
-            css = f'button {{ background-color: {color}; }}'.encode()
-            provider.load_from_data(css)
-            ctx = self._btn_bg.get_style_context()
-            old = getattr(self, '_bg_css_provider', None)
-            if old is not None:
-                ctx.remove_provider(old)
-            ctx.add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            self._bg_css_provider = provider
-
-            self._lbl_color.set_text(color)
-            self._set_status_color(self._lbl_color, color, bold=False)
-            self._schedule_preview()
-        dialog.destroy()
+    def _on_color_dialog_finish(self, dialog, result):
+        try:
+            rgba = dialog.choose_rgba_finish(result)
+        except GLib.Error:
+            rgba = None
         self._color_dialog = None
+
+        if rgba is None:
+            return
+
+        color = '#{:02x}{:02x}{:02x}'.format(
+            round(rgba.red * 255),
+            round(rgba.green * 255),
+            round(rgba.blue * 255),
+        )
+        self._bg_color = color
+
+        provider = Gtk.CssProvider()
+        css = f'#bg-color-button {{ background-color: {color}; }}'.encode()
+        provider.load_from_data(css)
+        display = Gdk.Display.get_default()
+        old = getattr(self, '_bg_css_provider', None)
+        if old is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, old)
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        self._bg_css_provider = provider
+
+        self._lbl_color.set_text(color)
+        self._set_status_color(self._lbl_color, color, bold=False)
+        self._schedule_preview()
 
     def _on_spin_changed(self, spin):
         self._schedule_preview()
@@ -533,7 +601,8 @@ class AppWindow(Gtk.ApplicationWindow):
         if self._preview_timeout_id is not None:
             GLib.source_remove(self._preview_timeout_id)
             self._preview_timeout_id = None
-        for path in (self._preview_path, self._preview_src_path):
+        for path in (self._preview_path, self._preview_src_path,
+                     self._clipboard_img_path, self._copy_out_path):
             try:
                 Path(path).unlink(missing_ok=True)
             except Exception:
@@ -633,6 +702,36 @@ class AppWindow(Gtk.ApplicationWindow):
         uri = Gio.File.new_for_path(self._output_path).get_uri()
         Gio.AppInfo.launch_default_for_uri(uri, None)
 
+    def _on_copy_clicked(self, button):
+        """Genera la imagen final y la copia al portapapeles."""
+        inp = self._image_path.strip()
+        if not inp:
+            self._show_error(tk_msg('err_no_img'))
+            return
+
+        cols = self._spin_cols.get_value_as_int()
+        rows = self._spin_rows.get_value_as_int()
+        gap  = self._spin_gap.get_value_as_int()
+
+        try:
+            create_image(
+                src=inp,
+                dst=self._copy_out_path,
+                cols=cols,
+                rows=rows,
+                gap=gap,
+                bg=self._bg_color,
+            )
+            with open(self._copy_out_path, 'rb') as f:
+                data = f.read()
+            content = Gdk.ContentProvider.new_for_bytes(
+                'image/png', GLib.Bytes.new(data)
+            )
+            self.get_clipboard().set_content(content)
+            self._show_ok(tk_msg('copy_ok'))
+        except Exception as e:
+            self._show_error(str(e))
+
     # ------------------------------------------------------------------
     # Generar imagen final
     # ------------------------------------------------------------------
@@ -652,15 +751,10 @@ class AppWindow(Gtk.ApplicationWindow):
         inp_path  = Path(inp)
         suggested = f'{inp_path.stem}_{cols}x{rows}'
 
-        dialog = Gtk.FileChooserNative.new(
-            tk_msg('save_title'),
-            self,
-            Gtk.FileChooserAction.SAVE,
-            None,
-            None,
-        )
-        dialog.set_current_folder(Gio.File.new_for_path(str(inp_path.parent)))
-        dialog.set_current_name(suggested + inp_path.suffix)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(tk_msg('save_title'))
+        dialog.set_initial_folder(Gio.File.new_for_path(str(inp_path.parent)))
+        dialog.set_initial_name(suggested + inp_path.suffix)
 
         # El tipo de la imagen de entrada va primero en la lista
         ext = inp_path.suffix.lower()
@@ -682,23 +776,21 @@ class AppWindow(Gtk.ApplicationWindow):
         else:
             order = (filter_png, filter_jpeg, filter_all)
 
+        filters = Gio.ListStore.new(Gtk.FileFilter)
         for f in order:
-            dialog.add_filter(f)
-        dialog.set_filter(order[0])
+            filters.append(f)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(order[0])
 
         self._gen_params = (inp, inp_path, cols, rows, gap)
-        dialog.connect('response', self._on_save_dialog_response)
-        dialog.show()
+        dialog.save(self, None, self._on_save_dialog_finish)
         self._save_dialog = dialog    # mantener referencia viva
 
-    def _on_save_dialog_response(self, dialog, response):
-        if response != Gtk.ResponseType.ACCEPT:
-            dialog.destroy()
-            self._save_dialog = None
-            return
-
-        file = dialog.get_file()
-        dialog.destroy()
+    def _on_save_dialog_finish(self, dialog, result):
+        try:
+            file = dialog.save_finish(result)
+        except GLib.Error:
+            file = None
         self._save_dialog = None
 
         if not file:

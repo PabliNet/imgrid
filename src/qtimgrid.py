@@ -12,7 +12,9 @@ from tempfile import NamedTemporaryFile
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
+from PySide6.QtGui import (
+    QDesktopServices, QIcon, QImage, QKeySequence, QPixmap, QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -30,7 +32,7 @@ from PySide6.QtWidgets import (
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.1.1'
+VERSION = '0.2.0'
 
 
 def _get_windows_lang():
@@ -89,6 +91,7 @@ messages = {
         'load_image':  'CARGAR IMAGEN',
         'background':  'FONDO',
         'save_image':  'GUARDAR IMAGEN',
+        'copy_image':  'COPIAR',
         'color_title': 'Elegir color de fondo',
         'open_title':  'Seleccionar imagen',
         'open_types':  'Imágenes',
@@ -102,6 +105,7 @@ messages = {
         'err_min':     "'{}' debe ser mayor a {}.",
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada',
+        'copy_ok':     'Imagen copiada al portapapeles',
         'open_folder': 'Abrir carpeta',
         'view_image':  'Ver imagen',
         'transparent': 'Transparente',
@@ -112,6 +116,7 @@ messages = {
         'load_image':  'LOAD IMAGE',
         'background':  'BACKGROUND',
         'save_image':  'SAVE IMAGE',
+        'copy_image':  'COPY',
         'color_title': 'Choose background color',
         'open_title':  'Select image',
         'open_types':  'Images',
@@ -125,6 +130,7 @@ messages = {
         'err_min':     "'{}' must be greater than {}.",
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved',
+        'copy_ok':     'Image copied to clipboard',
         'open_folder': 'Open folder',
         'view_image':  'View image',
         'transparent': 'Transparent',
@@ -214,7 +220,25 @@ class App(QMainWindow):
         self._preview_timer.setInterval(300)
         self._preview_timer.timeout.connect(self._update_preview)
 
+        # Archivo temporal donde se vuelca la imagen pegada del portapapeles
+        self._clipboard_file = NamedTemporaryFile(
+            prefix='qtimgrid_clip_', suffix='.png', delete=False
+        )
+        self._clipboard_img_path = self._clipboard_file.name
+        self._clipboard_file.close()
+
+        # Archivo temporal para la imagen generada a copiar al portapapeles
+        self._copy_file = NamedTemporaryFile(
+            prefix='qtimgrid_copy_', suffix='.png', delete=False
+        )
+        self._copy_out_path = self._copy_file.name
+        self._copy_file.close()
+
         self._build_ui()
+
+        # Pegar con el atajo estándar del sistema (Ctrl+V / Cmd+V)
+        self._paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, self)
+        self._paste_shortcut.activated.connect(self._paste_from_clipboard)
 
     # ------------------------------------------------------------------
     # Ícono de la ventana
@@ -298,10 +322,18 @@ class App(QMainWindow):
         self._set_status_color(self._lbl_color, self.OK_COLOR, bold=False)
         layout.addWidget(self._lbl_color)
 
-        # ── SAVE IMAGE ───────────────────────────────────────────────
+        # ── SAVE IMAGE / COPIAR ──────────────────────────────────────
+        frame_gen = QHBoxLayout()
+
         self._btn_gen = QPushButton(tk_msg('save_image'))
         self._btn_gen.clicked.connect(self._generate)
-        layout.addWidget(self._btn_gen)
+        frame_gen.addWidget(self._btn_gen, stretch=1)
+
+        self._btn_copy = QPushButton(tk_msg('copy_image'))
+        self._btn_copy.clicked.connect(self._copy_to_clipboard)
+        frame_gen.addWidget(self._btn_copy, stretch=1)
+
+        layout.addLayout(frame_gen)
 
         # ── MENSAJE DE ESTADO ────────────────────────────────────────
         frame_status = QHBoxLayout()
@@ -383,6 +415,17 @@ class App(QMainWindow):
         self._btn_view_image.setVisible(False)
         self._make_preview_source(path)
         self._schedule_preview()
+
+    def _paste_from_clipboard(self):
+        """Toma la imagen del portapapeles (si hay) y la carga como entrada."""
+        image = QApplication.clipboard().image()
+        if image.isNull():
+            return
+        try:
+            image.save(self._clipboard_img_path, 'PNG')
+            self._load_image(self._clipboard_img_path)
+        except Exception as e:
+            self._show_error(str(e))
 
     def _open_image(self):
         """Abre el diálogo para seleccionar la imagen de entrada."""
@@ -489,7 +532,8 @@ class App(QMainWindow):
     def closeEvent(self, event):
         """Detiene timers y elimina los archivos temporales de vista previa al cerrar."""
         self._preview_timer.stop()
-        for path in (self._preview_path, self._preview_src_path):
+        for path in (self._preview_path, self._preview_src_path,
+                     self._clipboard_img_path, self._copy_out_path):
             try:
                 Path(path).unlink(missing_ok=True)
             except Exception:
@@ -572,6 +616,32 @@ class App(QMainWindow):
         if not self._output_path:
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(self._output_path))
+
+    def _copy_to_clipboard(self):
+        """Genera la imagen final y la copia al portapapeles."""
+        inp = self._image_path.strip()
+        if not inp:
+            self._show_error(tk_msg('err_no_img'))
+            return
+
+        cols = self._spin_cols.value()
+        rows = self._spin_rows.value()
+        gap  = self._spin_gap.value()
+
+        try:
+            create_image(
+                src=inp,
+                dst=self._copy_out_path,
+                cols=cols,
+                rows=rows,
+                gap=gap,
+                bg=self._bg_color,
+            )
+            image = QImage(self._copy_out_path)
+            QApplication.clipboard().setImage(image)
+            self._show_ok(tk_msg('copy_ok'))
+        except Exception as e:
+            self._show_error(str(e))
 
     def _generate(self):
         """Valida los campos, pide ruta de salida y llama a create_image."""
