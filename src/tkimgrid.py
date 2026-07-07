@@ -151,10 +151,10 @@ class App(tk.Tk):
     # Ícono de la ventana
     # ------------------------------------------------------------------
     def _set_icon(self):
-        """Carga logo.svg y lo establece como ícono de la ventana."""
-        svg_path = _get_base_path() / 'imgrid.svg'
+        """Carga tkimgrid.svg y lo establece como ícono de la ventana."""
+        svg_path = _get_base_path() / 'tkimgrid.svg'
         if not svg_path.is_file():
-            svg_path = Path('/usr/share/pixmaps/imgrid.svg')
+            svg_path = Path('/usr/share/pixmaps/tkimgrid.svg')
         try:
             from PIL import Image, ImageTk
         except ImportError:
