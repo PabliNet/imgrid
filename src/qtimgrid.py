@@ -245,9 +245,9 @@ class App(QMainWindow):
     # ------------------------------------------------------------------
     def _set_icon(self):
         """Carga imgrid.svg y lo establece como ícono de la ventana."""
-        svg_path = _get_base_path() / 'imgrid.svg'
+        svg_path = _get_base_path() / 'qtimgrid.svg'
         if not svg_path.is_file():
-            svg_path = Path('/usr/share/pixmaps/imgrid.svg')
+            svg_path = Path('/usr/share/pixmaps/qtimgrid.svg')
         if svg_path.is_file():
             self.setWindowIcon(QIcon(str(svg_path)))
 

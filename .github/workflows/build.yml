@@ -39,7 +39,7 @@ jobs:
       - name: Build qtimgrid
         run: >
           pyinstaller --onefile --windowed --name qtimgrid.exe
-          --add-data "imgrid.svg;." src/qtimgrid.py
+          --add-data "qtimgrid.svg;." src/qtimgrid.py
       - uses: actions/upload-artifact@v4
         with:
           name: qtimgrid.exe
@@ -55,7 +55,7 @@ jobs:
       - name: Convert SVG icon to PNG for buildozer
         run: |
           sudo apt-get install -y librsvg2-bin
-          rsvg-convert -w 512 -h 512 imgrid.svg -o imgridroid/src/icon.png
+          rsvg-convert -w 512 -h 512 qtimgrid.svg -o imgridroid/src/icon.png
 
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
