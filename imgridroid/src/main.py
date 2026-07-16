@@ -67,9 +67,12 @@ MESSAGES = {
         'bg_color': 'Fondo',
         'generate': 'Generar',
         'share': 'Compartir',
+        'copy': 'Copiar',
         'save': 'Guardar',
         'saved_ok': 'Imagen guardada.',
         'save_error': 'No se pudo guardar.',
+        'copied_ok': 'Imagen copiada al portapapeles.',
+        'copy_error': 'No se pudo copiar.',
         'no_image': 'Primero elegí una imagen.',
         'generating': 'Generando…',
         'generated_ok': '¡Listo!',
@@ -90,9 +93,12 @@ MESSAGES = {
         'bg_color': 'Background',
         'generate': 'Generate',
         'share': 'Share',
+        'copy': 'Copy',
         'save': 'Save',
         'saved_ok': 'Image saved.',
         'save_error': 'Could not save.',
+        'copied_ok': 'Image copied to clipboard.',
+        'copy_error': 'Could not copy.',
         'no_image': 'Choose an image first.',
         'generating': 'Generating…',
         'generated_ok': 'Done!',
@@ -264,6 +270,46 @@ def share_file(path, on_error=None):
         import traceback
         msg = traceback.format_exc()
         print(f'[Imgridroid] share_file: {msg}')
+        if on_error:
+            on_error(msg)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Copiar al portapapeles
+# ─────────────────────────────────────────────────────────────────────────
+def copy_to_clipboard(path, on_error=None):
+    if platform != 'android':
+        return
+    try:
+        from jnius import autoclass
+
+        FileProvider = autoclass('androidx.core.content.FileProvider')
+        File = autoclass('java.io.File')
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        activity = PythonActivity.mActivity
+
+        authority = activity.getPackageName() + '.fileprovider'
+        uri = FileProvider.getUriForFile(activity, authority, File(str(path)))
+
+        ClipData = autoclass('android.content.ClipData')
+        ClipDescription = autoclass('android.content.ClipDescription')
+        ClipDataItem = autoclass('android.content.ClipData$Item')
+        String = autoclass('java.lang.String')
+        Context = autoclass('android.content.Context')
+        ClipboardManager = autoclass('android.content.ClipboardManager')
+
+        clip = ClipData(
+            ClipDescription(String('image'), [String('image/png')]),
+            ClipDataItem(uri)
+        )
+
+        clipboard = activity.getSystemService(Context.CLIPBOARD_SERVICE)
+        clipboard.setPrimaryClip(clip)
+
+    except Exception:
+        import traceback
+        msg = traceback.format_exc()
+        print(f'[Imgridroid] copy_to_clipboard: {msg}')
         if on_error:
             on_error(msg)
 
@@ -446,6 +492,11 @@ BoxLayout:
             text: app.tr('share')
             disabled: not app.has_result
             on_release: app.on_share()
+
+        Button:
+            text: app.tr('copy')
+            disabled: not app.has_result
+            on_release: app.on_copy()
 
         Button:
             text: app.tr('save')
@@ -818,6 +869,13 @@ class ImgridroidApp(App):
         Thread(target=self._generate_full_then,
                args=('share',), daemon=True).start()
 
+    def on_copy(self):
+        if not self.has_result:
+            return
+        self.status_text = t('saving_full')
+        Thread(target=self._generate_full_then,
+               args=('copy',), daemon=True).start()
+
     def on_save(self):
         if not self.has_result:
             return
@@ -851,6 +909,9 @@ class ImgridroidApp(App):
         self.status_text = ''
         if action == 'share':
             share_file(path, on_error=self._show_share_error)
+        elif action == 'copy':
+            copy_to_clipboard(path, on_error=self._show_share_error)
+            self.status_text = t('copied_ok')
         elif action == 'save':
             try:
                 dest = join(get_app_storage_dir(), basename(path))

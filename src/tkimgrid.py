@@ -4,14 +4,12 @@ tkimgrid.py — Interfaz gráfica para create_image().
 """
 
 from locale import getlocale, LC_ALL, setlocale
-from io import BytesIO
 from sys import argv, exit
 import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog
 
-from cairosvg import svg2png
 from pyimgrid import create_image
 
 VERSION = '0.0.4'
@@ -62,8 +60,6 @@ messages = {
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
         'ok_msg':      'Imagen guardada en: {}',
         'transparent': 'Transparente',
-        'pil_imagetk': ('Instalar:\n'
-            '  \x1b[7mapt install python3-pil.imagetk\x1b[27m'),
     },
     'en': {
         'title':       'Image to grid',
@@ -84,8 +80,6 @@ messages = {
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
         'ok_msg':      'Image saved at: {}',
         'transparent': 'Transparent',
-        'pil_imagetk': ('Install:\n'
-            '  \x1b[7mapt install python3-pil.imagetk\x1b[27m'),
     },
 }
 
@@ -138,7 +132,7 @@ class App(tk.Tk):
         self.resizable(False, False)
         self.configure(bg=self.BG)
 
-        # Ícono de la ventana desde logo.svg
+        # Ícono de la ventana desde tkimgrid.png
         self._set_icon()
 
         # Estado interno
@@ -151,21 +145,17 @@ class App(tk.Tk):
     # Ícono de la ventana
     # ------------------------------------------------------------------
     def _set_icon(self):
-        """Carga tkimgrid.svg y lo establece como ícono de la ventana."""
-        svg_path = _get_base_path() / 'tkimgrid.svg'
-        if not svg_path.is_file():
-            svg_path = Path('/usr/share/pixmaps/tkimgrid.svg')
-        try:
-            from PIL import Image, ImageTk
-        except ImportError:
-            print(tk_msg('pil_imagetk'))
-            return    # sin ImageTk no hay ícono; la ventana usa el default
+        """Carga tkimgrid.png y lo establece como ícono de la ventana."""
+        png_path = _get_base_path() / 'tkimgrid.png'
+        if not png_path.is_file():
+            png_path = Path('/usr/share/pixmaps/tkimgrid.png')
+        if not png_path.is_file():
+            return    # sin ícono, la ventana usa el default
 
         try:
-            png_data = svg2png(url=str(svg_path))    # tamaño natural: evita
-            img = Image.open(BytesIO(png_data))       # el recorte de cairosvg
-            img = img.resize((64, 64), Image.LANCZOS) # cuando falta width/height
-            self._icon = ImageTk.PhotoImage(img)
+            # tk.PhotoImage lee PNG de forma nativa desde Tcl/Tk 8.6,
+            # sin depender de PIL/ImageTk ni de convertir el SVG al vuelo
+            self._icon = tk.PhotoImage(file=str(png_path))
             self.iconphoto(True, self._icon)
         except Exception:
             pass    # si falla, la ventana usa el ícono por defecto
