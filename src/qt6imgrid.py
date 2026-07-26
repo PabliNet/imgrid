@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 
 
 def _get_windows_lang():
@@ -291,7 +291,7 @@ class App(QMainWindow):
             frame_crg, tk_msg('lbl_rows'), default=2, min_val=1
         )
         self._spin_gap  = self._make_int_field(
-            frame_crg, tk_msg('lbl_gap'),  default=5, min_val=0
+            frame_crg, tk_msg('lbl_gap'),  default=0, min_val=0, max_val=3
         )
 
         layout.addLayout(frame_crg)
@@ -360,7 +360,7 @@ class App(QMainWindow):
     # ------------------------------------------------------------------
     # Helpers de construcción
     # ------------------------------------------------------------------
-    def _make_int_field(self, parent_layout, label, default=0, min_val=0):
+    def _make_int_field(self, parent_layout, label, default=0, min_val=0, max_val=9999):
         """Crea un sub-layout con etiqueta + spinbox y lo agrega al padre."""
         frame = QVBoxLayout()
 
@@ -370,7 +370,7 @@ class App(QMainWindow):
 
         spin = QSpinBox()
         spin.setMinimum(min_val)
-        spin.setMaximum(9999)
+        spin.setMaximum(max_val)
         spin.setValue(default)
         spin.setAlignment(Qt.AlignCenter)
         spin.valueChanged.connect(self._schedule_preview)
@@ -378,6 +378,11 @@ class App(QMainWindow):
 
         parent_layout.addLayout(frame)
         return spin
+
+    def _gap_px(self):
+        """Convierte la posición del spinbox de gap (0-3mm) a píxeles
+        reales, multiplicando por 12 (escala fija a 300 DPI)."""
+        return self._spin_gap.value() * 12
 
     @staticmethod
     def _set_status_color(label, color, bold=True):
@@ -490,7 +495,7 @@ class App(QMainWindow):
 
         cols = self._spin_cols.value()
         rows = self._spin_rows.value()
-        gap  = self._spin_gap.value()
+        gap  = self._gap_px()
 
         src = (
             self._preview_src_path
@@ -626,7 +631,7 @@ class App(QMainWindow):
 
         cols = self._spin_cols.value()
         rows = self._spin_rows.value()
-        gap  = self._spin_gap.value()
+        gap  = self._gap_px()
 
         try:
             create_image(
@@ -653,7 +658,7 @@ class App(QMainWindow):
 
         cols = self._spin_cols.value()
         rows = self._spin_rows.value()
-        gap  = self._spin_gap.value()
+        gap  = self._gap_px()
 
         # Elegir ruta de salida con nombre sugerido
         inp_path  = Path(inp)

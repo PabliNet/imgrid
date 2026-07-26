@@ -20,7 +20,7 @@ from gi.repository import GObject, Gtk, Gdk, Gio, GLib, GdkPixbuf
 from PIL import Image
 from pyimgrid import create_image
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -254,7 +254,7 @@ class AppWindow(Gtk.ApplicationWindow):
             box_crg, tk_msg('lbl_rows'), default=2, min_val=1
         )
         self._spin_gap = self._make_int_field(
-            box_crg, tk_msg('lbl_gap'), default=5, min_val=0
+            box_crg, tk_msg('lbl_gap'), default=0, min_val=0, max_val=3
         )
 
         root.append(box_crg)
@@ -320,7 +320,7 @@ class AppWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
     # Helpers de construcción
     # ------------------------------------------------------------------
-    def _make_int_field(self, parent_box, label, default=0, min_val=0):
+    def _make_int_field(self, parent_box, label, default=0, min_val=0, max_val=9999):
         """Crea una columna con etiqueta + spinbutton y la agrega al padre."""
         frame = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
 
@@ -331,7 +331,7 @@ class AppWindow(Gtk.ApplicationWindow):
         adjustment = Gtk.Adjustment(
             value=default,
             lower=min_val,
-            upper=9999,
+            upper=max_val,
             step_increment=1,
             page_increment=10,
         )
@@ -345,6 +345,11 @@ class AppWindow(Gtk.ApplicationWindow):
 
         parent_box.append(frame)
         return spin
+
+    def _gap_px(self):
+        """Convierte la posición del spinbox de gap (0-3mm) a píxeles
+        reales, multiplicando por 12 (escala fija a 300 DPI)."""
+        return self._spin_gap.get_value_as_int() * 12
 
     def _set_status_color(self, label, color, bold=True):
         """Aplica color y negrita al label mediante atributos Pango."""
@@ -564,7 +569,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
         cols = self._spin_cols.get_value_as_int()
         rows = self._spin_rows.get_value_as_int()
-        gap  = self._spin_gap.get_value_as_int()
+        gap  = self._gap_px()
 
         src = (
             self._preview_src_path
@@ -711,7 +716,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
         cols = self._spin_cols.get_value_as_int()
         rows = self._spin_rows.get_value_as_int()
-        gap  = self._spin_gap.get_value_as_int()
+        gap  = self._gap_px()
 
         try:
             create_image(
@@ -745,7 +750,7 @@ class AppWindow(Gtk.ApplicationWindow):
 
         cols = self._spin_cols.get_value_as_int()
         rows = self._spin_rows.get_value_as_int()
-        gap  = self._spin_gap.get_value_as_int()
+        gap  = self._gap_px()
 
         # Elegir ruta de salida con nombre sugerido
         inp_path  = Path(inp)

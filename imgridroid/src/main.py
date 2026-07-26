@@ -29,6 +29,12 @@ from pyimgrid import create_image
 VERSION = '0.2.0'
 DEFAULT_BG_HEX = None   # None = transparente (se pasa directo a create_image)
 
+# Slider de gap: 4 posiciones fijas (0/1/2/3mm), siempre a 300 DPI.
+# Escala lineal de 12px por mm (en vez del redondeo exacto por posición,
+# para mantener una progresión consistente y fácil de extender).
+GAP_SLIDER_MM = [0, 1, 2, 3]
+GAP_SLIDER_PX = [0, 12, 24, 36]
+
 _image_lock = Lock()   # protege acceso concurrente a source_path y preview_src_path
 
 
@@ -442,12 +448,12 @@ BoxLayout:
         Slider:
             id: gap_slider
             min: 0
-            max: 35
-            value: app.gap
+            max: 3
+            value: app.gap_index
             step: 1
-            on_value: app.on_param_change('gap', self.value)
+            on_value: app.on_gap_slider_change(self.value)
         Label:
-            text: f"{int(gap_slider.value)}px"
+            text: f"{app.GAP_SLIDER_MM[int(gap_slider.value)]}mm"
             size_hint_x: None
             width: dp(40)
             halign: 'right'
@@ -521,9 +527,12 @@ class ImgridroidApp(App):
     preview_src_path = StringProperty('')   # copia reducida al tamaño del widget
     result_image     = StringProperty('')   # lo que muestra el widget Image
 
-    cols    = NumericProperty(3)
-    rows    = NumericProperty(3)
-    gap     = NumericProperty(0)
+    GAP_SLIDER_MM = GAP_SLIDER_MM   # expuesto como atributo de clase para el KV
+
+    cols       = NumericProperty(3)
+    rows       = NumericProperty(3)
+    gap        = NumericProperty(0)   # valor real en píxeles, usado por create_image
+    gap_index  = NumericProperty(0)   # posición del slider (0-3), mapea a mm/px
     bg_hex  = ObjectProperty(None, allownone=True)  # None = transparente; '#RRGGBB' = color
     bg_rgba = ListProperty([1, 1, 1, 1])
 
@@ -798,6 +807,16 @@ class ImgridroidApp(App):
         setattr(self, name, int(value))
         self._invalidate_result()
 
+    def on_gap_slider_change(self, position):
+        """El slider de gap se mueve en posiciones discretas (0-3), que
+        representan 0/1/2/3mm a 300 DPI. Acá se traduce la posición al
+        valor real en píxeles que create_image necesita.
+        """
+        index = int(position)
+        self.gap_index = index
+        self.gap = GAP_SLIDER_PX[index]
+        self._invalidate_result()
+
     def _invalidate_result(self):
         self.has_result = False
 
@@ -895,10 +914,6 @@ class ImgridroidApp(App):
                              int(self.cols), int(self.rows),
                              int(self.gap), self.bg_hex or None)
             Clock.schedule_once(lambda dt: self._on_full_ready(action, out))
-        except Exception as e:
-            Clock.schedule_once(
-                lambda dt: setattr(self, 'status_text', t('generate_error')))
-            print(f'[Imgridroid] _generate_full_then: {e}')
         except Exception as e:
             Clock.schedule_once(
                 lambda dt: setattr(self, 'status_text', t('generate_error')))

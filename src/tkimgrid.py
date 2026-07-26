@@ -12,7 +12,7 @@ from tkinter import colorchooser, filedialog
 
 from pyimgrid import create_image
 
-VERSION = '0.0.4'
+VERSION = '0.0.5'
 
 setlocale(LC_ALL, '')
 lang = (getlocale()[0] or 'en').split('_')[0]
@@ -58,6 +58,7 @@ messages = {
         'err_int':     "'{}' debe ser un número entero.",
         'err_min':     "'{}' debe ser mayor a {}.",
         'err_min_eq':  "'{}' debe ser mayor o igual a {}.",
+        'err_max':     "'{}' debe ser menor o igual a {}.",
         'ok_msg':      'Imagen guardada en: {}',
         'transparent': 'Transparente',
     },
@@ -78,6 +79,7 @@ messages = {
         'err_int':     "'{}' must be an integer.",
         'err_min':     "'{}' must be greater than {}.",
         'err_min_eq':  "'{}' must be greater than or equal to {}.",
+        'err_max':     "'{}' must be less than or equal to {}.",
         'ok_msg':      'Image saved at: {}',
         'transparent': 'Transparent',
     },
@@ -92,8 +94,8 @@ def tk_msg(key):
 # ---------------------------------------------------------------------------
 # Validación de enteros
 # ---------------------------------------------------------------------------
-def _validate_int(value, name, minimum):
-    """Convierte value a int y verifica que sea >= minimum."""
+def _validate_int(value, name, minimum, maximum=None):
+    """Convierte value a int y verifica que esté entre minimum y maximum."""
     try:
         n = int(value)
     except ValueError:
@@ -102,6 +104,8 @@ def _validate_int(value, name, minimum):
         if minimum == 0:
             raise ValueError(tk_msg('err_min_eq').format(name, minimum))
         raise ValueError(tk_msg('err_min').format(name, minimum - 1))
+    if maximum is not None and n > maximum:
+        raise ValueError(tk_msg('err_max').format(name, maximum))
     return n
 
 
@@ -195,7 +199,7 @@ class App(tk.Tk):
             frame_crg, tk_msg('lbl_rows'), default=2, min_val=1
         )
         self._entry_gap  = self._make_int_field(
-            frame_crg, tk_msg('lbl_gap'),  default=5, min_val=0
+            frame_crg, tk_msg('lbl_gap'),  default=0, min_val=0, max_val=3
         )
 
         for widget in frame_crg.winfo_children():
@@ -278,7 +282,7 @@ class App(tk.Tk):
             pady=6,
         )
 
-    def _make_int_field(self, parent, label, default=0, min_val=0):
+    def _make_int_field(self, parent, label, default=0, min_val=0, max_val=None):
         """Crea un frame con etiqueta + entry; las flechas cambian el valor."""
         frame = tk.Frame(parent, bg=self.BG)
 
@@ -304,20 +308,24 @@ class App(tk.Tk):
         entry.insert(0, str(default))    # valor predeterminado
         entry.pack()
 
-        # Flecha arriba +1, flecha abajo -1 (respetando min_val)
-        entry.bind('<Up>',   lambda e: self._step(entry, +1, min_val))
-        entry.bind('<Down>', lambda e: self._step(entry, -1, min_val))
+        # Flecha arriba +1, flecha abajo -1 (respetando min_val y max_val)
+        entry.bind('<Up>',   lambda e: self._step(entry, +1, min_val, max_val))
+        entry.bind('<Down>', lambda e: self._step(entry, -1, min_val, max_val))
 
         return entry
 
     @staticmethod
-    def _step(entry, delta, min_val=0):
-        """Incrementa o decrementa el valor del entry respetando min_val."""
+    def _step(entry, delta, min_val=0, max_val=None):
+        """Incrementa o decrementa el valor del entry respetando min_val
+        y, si se especifica, max_val."""
         try:
             value = int(entry.get())
         except ValueError:
             value = min_val
-        new_value = max(min_val, value + delta)
+        new_value = value + delta
+        new_value = max(min_val, new_value)
+        if max_val is not None:
+            new_value = min(max_val, new_value)
         entry.delete(0, tk.END)
         entry.insert(0, str(new_value))
 
@@ -391,8 +399,8 @@ class App(tk.Tk):
                 self._entry_rows.get(), tk_msg('lbl_rows'), 1
             )
             gap  = _validate_int(
-                self._entry_gap.get() or '0', tk_msg('lbl_gap'), 0
-            )
+                self._entry_gap.get() or '0', tk_msg('lbl_gap'), 0, maximum=3
+            ) * 12   # 0-3mm del campo -> píxeles reales, a 300 DPI
         except ValueError as e:
             self._show_error(str(e))
             return
